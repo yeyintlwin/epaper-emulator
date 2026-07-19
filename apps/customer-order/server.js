@@ -107,7 +107,7 @@ function createServer(options = {}) {
         return sendJson(res, 200, { session: store.getSession(url.searchParams.get("table_number")) });
       }
 
-      const welcomeRoute = url.pathname.match(/^\/api\/table-displays\/(\d+)\/welcome$/);
+      const welcomeRoute = url.pathname.match(/^\/api\/table-displays\/([^/]+)\/welcome$/);
       if (req.method === "POST" && welcomeRoute) {
         if (!tableDisplayApiKey) {
           return sendJson(res, 503, { error: "Table display provisioning is not configured" });

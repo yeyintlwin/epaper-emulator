@@ -60,8 +60,9 @@ test("keeps a stored order successful and retries a failed e-paper update", asyn
   assert.equal(attempts, 2);
 });
 
-test("frontend config endpoint does not expose e-paper secrets", async () => {
+test("frontend config endpoint does not expose e-paper or display secrets", async () => {
   const server = createServer({
+    tableDisplayApiKey: "display-secret",
     epaperClient: { updateTableInUse: async () => ({ ok: true }) }
   });
 
@@ -69,6 +70,8 @@ test("frontend config endpoint does not expose e-paper secrets", async () => {
 
   assert.equal(response.status, 200);
   assert.equal(response.body.epaperApiKey, undefined);
+  assert.equal(response.body.tableDisplayApiKey, undefined);
+  assert.equal(response.body.apiKey, undefined);
   assert.equal(response.body.maxTableNumber, 12);
 });
 
@@ -123,7 +126,7 @@ test("provisioning rejects missing or incorrect authorization", async () => {
   assert.equal(updates, 0);
 });
 
-test("provisioning rejects table numbers outside 1 through 12", async () => {
+test("provisioning rejects invalid table number segments", async () => {
   let updates = 0;
   const server = createServer({
     tableDisplayApiKey: "display-secret",
@@ -133,14 +136,16 @@ test("provisioning rejects table numbers outside 1 through 12", async () => {
     })
   });
 
-  const response = await server.inject(
-    "POST",
-    "/api/table-displays/13/welcome",
-    undefined,
-    { authorization: "Bearer display-secret" }
-  );
+  for (const tableNumber of ["13", "-1", "1.5", "not-a-number"]) {
+    const response = await server.inject(
+      "POST",
+      `/api/table-displays/${tableNumber}/welcome`,
+      undefined,
+      { authorization: "Bearer display-secret" }
+    );
 
-  assert.equal(response.status, 400);
+    assert.equal(response.status, 400);
+  }
   assert.equal(updates, 0);
 });
 
@@ -174,16 +179,23 @@ test("provisioning maps SDK failures to 502 without changing the session", async
     })
   });
 
+  const order = await server.inject("POST", "/api/orders", {
+    table_number: 7,
+    items: [{ id: "crispy-gyoza", quantity: 1 }]
+  });
+  const before = await server.inject("GET", "/api/session?table_number=7");
   const response = await server.inject(
     "POST",
     "/api/table-displays/7/welcome",
     undefined,
     { authorization: "Bearer display-secret" }
   );
-  const session = await server.inject("GET", "/api/session?table_number=7");
+  const after = await server.inject("GET", "/api/session?table_number=7");
 
+  assert.equal(order.status, 201);
+  assert.equal(before.body.session.status, "Table is in use");
+  assert.equal(before.body.session.orders.length, 1);
   assert.equal(response.status, 502);
   assert.deepEqual(response.body, { error: "E-paper display update failed" });
-  assert.equal(session.body.session.status, "Welcome");
-  assert.deepEqual(session.body.session.orders, []);
+  assert.deepEqual(after.body.session, before.body.session);
 });
