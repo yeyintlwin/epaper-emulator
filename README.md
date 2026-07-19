@@ -1,115 +1,59 @@
-# E-paper Emulator
+# Restaurant Management System
 
-Web application and API emulator for 12 e-paper displays. Each display has a fixed 296x128 pixel canvas and supports white, black, and red.
+Restaurant ordering platform with table e-paper monitors, customer ordering, kitchen order display, cashier checkout, and admin management.
 
-The web UI is a realtime viewer for the 12 screens. Pixel updates are sent through the API.
+## Apps
 
-## Run Locally
+- `apps/epaper-hub` - running e-paper emulator and secure update API for 12 table monitors.
+- `apps/customer-order` - customer phone ordering flow after scanning the table QR code.
+- `apps/kitchen-display` - kitchen monitor for incoming orders and preparation status.
+- `apps/cashier-counter` - checkout, bill review, payment QR, and final settlement.
+- `apps/admin-management` - menu management, pricing, daily sales, and transaction history.
+- `apps/captive-portal` - guest Wi-Fi onboarding and survey flow.
+- `packages/shared` - shared schemas and helpers used across apps.
+- `infra` - deployment and infrastructure notes.
+
+## Current Status
+
+The first working service is the e-paper hub at `apps/epaper-hub`. It is deployed at `https://epaper-hub.yeyintlwin.com` and still uses the same GitHub Actions CI/CD pipeline.
+
+Run the current app locally:
 
 ```bash
+cd apps/epaper-hub
 cp .env.example .env
 npm install
 npm start
 ```
 
-Open `http://localhost:3000`.
-
-API documentation is available at `http://localhost:3000/api/docs`.
-
-## Docker
+Run tests from the repository root:
 
 ```bash
-cp .env.example .env
-docker compose up -d --build
+npm test
 ```
 
-Latest e-paper screen state is persisted in the Docker named volume `epaper-data`, so browser refreshes and container restarts keep the last update.
+## Core Flow
 
-## Secure Update API
+1. Each restaurant table has an e-paper monitor showing table number, status, and a QR code.
+2. Initial table status is `Welcome`.
+3. The customer scans the QR code and opens the ordering page with the table number in the URL.
+4. The customer selects a language: Thai, English, Chinese, Japanese, or Burmese.
+5. The customer adds menu items to the cart and places an order.
+6. When the first order is placed, the table status updates to `Table is in use`.
+7. The kitchen monitor receives the order with the table number.
+8. The kitchen printer prints a slip with table number, ordered items, slip number, and barcode.
+9. The first order creates the slip number. All later orders from the same table session keep that same slip number until checkout.
+10. The cashier completes checkout and closes the table session.
 
-Open `/api/docs` in the running app for the endpoint reference.
+## Management Requirements
 
-Use either `Authorization: Bearer <API_KEY>` or `x-api-key: <API_KEY>`.
+The admin interface must support menu item management, price changes, daily sales reports, and full transaction history.
 
-### Compact Pixel Format
+## Deployment Shape
 
-For real devices, use `epd-2bit-v1`. It packs each pixel into 2 bits:
+The Lightsail server should keep only the runtime deployment files in `~/epaper-emulator`:
 
-- `00` = white
-- `01` = black
-- `10` = red
+- `docker-compose.yml`
+- optional `config/`
 
-A full 296x128 frame is 9,472 bytes before base64 encoding.
-
-```json
-{
-  "format": "epd-2bit-v1",
-  "width": 296,
-  "height": 128,
-  "data": "base64-packed-bytes"
-}
-```
-
-Update by path:
-
-```bash
-curl -X POST http://SERVER_IP:3000/api/epapers/1 \
-  -H "Authorization: Bearer replace-with-a-long-random-secret" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "format": "epd-2bit-v1",
-    "width": 296,
-    "height": 128,
-    "data": "base64-packed-bytes"
-  }'
-```
-
-Update by body:
-
-```bash
-curl -X POST http://SERVER_IP:3000/api/update \
-  -H "x-api-key: replace-with-a-long-random-secret" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "id": 2,
-    "data": {
-      "format": "epd-2bit-v1",
-      "width": 296,
-      "height": 128,
-      "data": "base64-packed-bytes"
-    }
-  }'
-```
-
-The demo script uses this compact format automatically. The server still accepts the older debug formats, `bitmap` rows and `pixels`, for manual testing.
-
-Send 12 demo screens with different icon-style pixel art:
-
-```bash
-EPAPER_URL=https://epaper-hub.yeyintlwin.com API_KEY=your-key npm run demo
-```
-
-Older debug pixel payload:
-
-```json
-{
-  "id": 3,
-  "data": {
-    "pixels": [
-      { "x": 10, "y": 10, "color": "black" },
-      { "x": 11, "y": 10, "color": "red" }
-    ]
-  }
-}
-```
-
-## AWS Lightsail Ubuntu
-
-1. Install Docker and Docker Compose.
-2. Keep runtime config outside the deploy folder at `~/epaper-emulator.env`.
-3. Keep only `~/epaper-emulator/docker-compose.yml` on the server, plus `~/epaper-emulator/config/` if needed later.
-4. GitHub Actions builds the Docker image, uploads it, and runs `docker compose up -d --no-build`.
-5. The latest screen state is stored inside the Docker named volume `epaper-data`, not in the project folder.
-6. Open ports `80` and `443` in the Lightsail firewall.
-
-Run the app on `127.0.0.1:3000` and proxy `epaper-hub.yeyintlwin.com` to it with Nginx.
+The environment file remains outside that folder at `~/epaper-emulator.env`.

@@ -15,12 +15,15 @@ jobs:
           node-version: 20
 
       - run: npm ci
+        working-directory: apps/epaper-hub
+
       - run: npm test
+        working-directory: apps/epaper-hub
 
       - name: Build image
         run: |
           set -euo pipefail
-          docker build -t epaper-emulator:${{ github.sha }} .
+          docker build -t epaper-emulator:${{ github.sha }} apps/epaper-hub
           docker save epaper-emulator:${{ github.sha }} | gzip > /tmp/epaper-emulator-image.tgz
 
       - name: Install SSH key
@@ -35,7 +38,7 @@ jobs:
         run: |
           set -euo pipefail
           ssh -i ~/.ssh/lightsail.pem "${{ secrets.LIGHTSAIL_USER }}@${{ secrets.LIGHTSAIL_HOST }}" 'mkdir -p ~/epaper-emulator'
-          scp -i ~/.ssh/lightsail.pem docker-compose.yml "${{ secrets.LIGHTSAIL_USER }}@${{ secrets.LIGHTSAIL_HOST }}:~/epaper-emulator/docker-compose.yml"
+          scp -i ~/.ssh/lightsail.pem apps/epaper-hub/docker-compose.yml "${{ secrets.LIGHTSAIL_USER }}@${{ secrets.LIGHTSAIL_HOST }}:~/epaper-emulator/docker-compose.yml"
           scp -i ~/.ssh/lightsail.pem /tmp/epaper-emulator-image.tgz "${{ secrets.LIGHTSAIL_USER }}@${{ secrets.LIGHTSAIL_HOST }}:/tmp/epaper-emulator-image.tgz"
 
       - name: Deploy on Lightsail
