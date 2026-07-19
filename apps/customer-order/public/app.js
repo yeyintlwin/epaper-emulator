@@ -2,6 +2,7 @@ const state = {
   tableNumber: 1,
   menu: { tabs: [], items: [] },
   activeTab: "Recommended",
+  activeView: "menu",
   cart: new Map(),
   session: null
 };
@@ -47,27 +48,47 @@ function setQuantity(id, quantity) {
   if (quantity <= 0) state.cart.delete(id);
   else state.cart.set(id, quantity);
   renderMenu();
-  renderCart();
+  renderBucket();
+}
+
+function tabs() {
+  return state.menu.tabs.length ? state.menu.tabs : fallbackTabs;
 }
 
 function filteredItems() {
   const query = $("#searchInput").value.trim().toLowerCase();
   return state.menu.items.filter((item) => {
-    const matchesTab = state.activeTab === "All Items" || item.category === state.activeTab || (state.activeTab === "All Items" && item.category !== "Service & Utensils");
+    const matchesTab = state.activeTab === "All Items" || item.category === state.activeTab;
     const matchesQuery = !query || `${item.name} ${item.description} ${item.tags.join(" ")}`.toLowerCase().includes(query);
     return matchesTab && matchesQuery;
   });
 }
 
-function renderTabs() {
-  const tabs = state.menu.tabs.length ? state.menu.tabs : fallbackTabs;
-  $("#menuTabs").innerHTML = tabs
-    .map((tab) => `<button class="tabButton ${tab === state.activeTab ? "active" : ""}" type="button" data-tab="${tab}">${tab}</button>`)
+function setActiveView(view) {
+  state.activeView = view;
+  document.querySelectorAll(".appView").forEach((panel) => panel.classList.toggle("active", panel.dataset.panel === view));
+  document.querySelectorAll("[data-view]").forEach((button) => button.classList.toggle("active", button.dataset.view === view));
+}
+
+function openDrawer() {
+  $("#categoryDrawer").classList.add("open");
+  $("#drawerBackdrop").classList.add("open");
+}
+
+function closeDrawer() {
+  $("#categoryDrawer").classList.remove("open");
+  $("#drawerBackdrop").classList.remove("open");
+}
+
+function renderCategories() {
+  $("#categoryList").innerHTML = tabs()
+    .map((tab) => `<button class="categoryButton ${tab === state.activeTab ? "active" : ""}" type="button" data-tab="${tab}">${tab}</button>`)
     .join("");
+  $("#activeCategoryTitle").textContent = state.activeTab;
 }
 
 function renderMenu() {
-  renderTabs();
+  renderCategories();
   const items = filteredItems();
   $("#menuList").innerHTML = items.length
     ? items
@@ -102,15 +123,39 @@ function currentCartTotal() {
   return cartLines().reduce((sum, item) => sum + item.price * item.quantity, 0);
 }
 
-function renderCart() {
+function renderBucket() {
   const lines = cartLines();
   const count = lines.reduce((sum, item) => sum + item.quantity, 0);
   $("#cartCount").textContent = `${count} item${count === 1 ? "" : "s"}`;
   $("#cartTotal").textContent = money.format(currentCartTotal());
   $("#cartItems").innerHTML = lines.length
     ? lines.map((item) => `<div class="cartLine"><span>${item.quantity} x ${item.name}</span><strong>${money.format(item.price * item.quantity)}</strong></div>`).join("")
-    : "Choose dishes to begin.";
+    : `<p class="empty">Choose dishes from the Menu tab.</p>`;
   $("#placeOrderButton").disabled = lines.length === 0;
+}
+
+function renderHistory() {
+  const orders = state.session && state.session.orders ? state.session.orders : [];
+  $("#historyList").innerHTML = orders.length
+    ? orders
+        .map((order) => `<article class="historyCard">
+          <header><strong>${order.id}</strong><span>${money.format(order.totals.total)}</span></header>
+          <ul>${order.items.map((item) => `<li>${item.quantity} x ${item.name}</li>`).join("")}</ul>
+        </article>`)
+        .join("")
+    : `<p class="empty">No orders yet.</p>`;
+}
+
+function renderBarcode(value) {
+  const text = String(value || `TABLE-${state.tableNumber}`);
+  const bars = [...text].flatMap((char) => {
+    const code = char.charCodeAt(0);
+    return [
+      `<span class="barcodeBar ${code % 2 ? "thin" : "wide"}"></span>`,
+      `<span class="barcodeBar"></span>`
+    ];
+  }).join("");
+  $("#checkoutBarcode").innerHTML = `<div>${bars}<span class="barcodeText">${text}</span></div>`;
 }
 
 function renderSession() {
@@ -119,6 +164,8 @@ function renderSession() {
   $("#sessionStatus").textContent = session ? session.status : "Welcome";
   $("#slipNumber").textContent = session && session.slipNumber ? session.slipNumber : "No slip yet";
   renderTotals(session ? session.totals : { subtotal: 0, serviceFee: 0, tax: 0, total: 0 });
+  renderHistory();
+  renderBarcode(session && session.slipNumber);
 }
 
 function renderTotals(totals) {
@@ -141,8 +188,9 @@ async function placeOrder() {
   state.session = result.session;
   state.cart.clear();
   renderSession();
-  renderCart();
+  renderBucket();
   renderMenu();
+  setActiveView("history");
   showToast(`Order sent. Slip ${result.session.slipNumber}`);
 }
 
@@ -164,21 +212,27 @@ async function init() {
   state.session = sessionResult.session;
   renderSession();
   renderMenu();
-  renderCart();
+  renderBucket();
 }
 
 document.addEventListener("click", (event) => {
   const inc = event.target.closest("[data-inc]");
   const dec = event.target.closest("[data-dec]");
   const tab = event.target.closest("[data-tab]");
+  const view = event.target.closest("[data-view]");
   if (inc) setQuantity(inc.dataset.inc, quantityFor(inc.dataset.inc) + 1);
   if (dec) setQuantity(dec.dataset.dec, quantityFor(dec.dataset.dec) - 1);
   if (tab) {
     state.activeTab = tab.dataset.tab;
+    closeDrawer();
     renderMenu();
   }
+  if (view) setActiveView(view.dataset.view);
 });
 
+$("#openCategoryDrawer").addEventListener("click", openDrawer);
+$("#closeCategoryDrawer").addEventListener("click", closeDrawer);
+$("#drawerBackdrop").addEventListener("click", closeDrawer);
 $("#searchInput").addEventListener("input", renderMenu);
 $("#splitCount").addEventListener("input", () => renderSession());
 $("#placeOrderButton").addEventListener("click", () => placeOrder().catch((error) => showToast(error.message)));

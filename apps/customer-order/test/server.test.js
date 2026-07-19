@@ -40,3 +40,9 @@ test("frontend config endpoint does not expose e-paper secrets", async () => {
   assert.equal(response.body.epaperApiKey, undefined);
   assert.equal(response.body.maxTableNumber, 12);
 });
+
+test("server can reuse epaper hub API_KEY when EPAPER_API_KEY is not set", () => {
+  const source = require("node:fs").readFileSync(require.resolve("../server"), "utf8");
+
+  assert.match(source, /process\.env\.EPAPER_API_KEY \|\| process\.env\.API_KEY/);
+});

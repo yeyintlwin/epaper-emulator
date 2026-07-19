@@ -7,7 +7,7 @@ Restaurant ordering platform with table e-paper monitors, customer ordering, kit
 - `apps/epaper-hub` - running e-paper emulator and secure update API for 12 table monitors.
 - `apps/customer-order` - customer phone ordering flow after scanning the table QR code.
 - `apps/kitchen-display` - kitchen monitor for incoming orders and preparation status.
-- `apps/cashier-counter` - checkout, bill review, payment QR, and final settlement.
+- `apps/cashier-counter` - checkout, bill review, checkout barcode scanning, and final settlement.
 - `apps/admin-management` - menu management, pricing, daily sales, and transaction history.
 - `apps/captive-portal` - guest Wi-Fi onboarding and survey flow.
 - `packages/shared` - shared schemas and helpers used across apps.

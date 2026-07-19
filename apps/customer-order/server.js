@@ -72,7 +72,7 @@ function createServer(options = {}) {
   const store = options.store || createOrderStore({ now: options.now });
   const epaperClient = options.epaperClient || createEpaperClient({
     hubUrl: process.env.EPAPER_HUB_URL,
-    apiKey: process.env.EPAPER_API_KEY
+    apiKey: process.env.EPAPER_API_KEY || process.env.API_KEY
   });
 
   async function handler(req, res) {

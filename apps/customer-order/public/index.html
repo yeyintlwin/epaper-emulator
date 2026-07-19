@@ -13,50 +13,116 @@
           <p class="eyebrow">Table</p>
           <h1 id="tableTitle">Table --</h1>
         </div>
-        <button class="iconButton" id="callStaffButton" type="button" aria-label="Call staff">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a6 6 0 0 0-6 6v3.5L4 16v1h16v-1l-2-3.5V9a6 6 0 0 0-6-6Zm0 18a3 3 0 0 0 2.8-2H9.2A3 3 0 0 0 12 21Z"/></svg>
-        </button>
+        <div class="topMeta">
+          <span id="sessionStatus">Welcome</span>
+          <strong id="slipNumber">No slip yet</strong>
+        </div>
       </header>
 
       <section class="statusPanel">
-        <div>
-          <span class="statusDot"></span>
-          <span id="sessionStatus">Welcome</span>
-        </div>
-        <strong id="slipNumber">No slip yet</strong>
+        <span class="statusDot"></span>
+        <span>Scan, order, relax. Your table stays linked to this slip.</span>
       </section>
 
-      <label class="searchBox">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m21 20-5.6-5.6a7 7 0 1 0-1.4 1.4L20 21l1-1ZM5 10a5 5 0 1 1 10 0A5 5 0 0 1 5 10Z"/></svg>
-        <input id="searchInput" type="search" placeholder="Search menu" autocomplete="off" />
-      </label>
+      <section class="appView active" id="menuView" data-panel="menu">
+        <div class="viewHeader">
+          <div>
+            <p class="eyebrow">Menu</p>
+            <h2 id="activeCategoryTitle">Recommended</h2>
+          </div>
+          <button class="secondaryButton" id="openCategoryDrawer" type="button">Categories</button>
+        </div>
 
-      <nav class="tabs" id="menuTabs" aria-label="Menu categories"></nav>
-      <section class="menuList" id="menuList" aria-live="polite"></section>
+        <label class="searchBox">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m21 20-5.6-5.6a7 7 0 1 0-1.4 1.4L20 21l1-1ZM5 10a5 5 0 1 1 10 0A5 5 0 0 1 5 10Z"/></svg>
+          <input id="searchInput" type="search" placeholder="Search menu" autocomplete="off" />
+        </label>
 
-      <section class="checkoutPanel" id="checkoutPanel">
-        <h2>Checkout</h2>
+        <section class="menuList" id="menuList" aria-live="polite"></section>
+      </section>
+
+      <section class="appView" id="bucketView" data-panel="bucket">
+        <div class="viewHeader">
+          <div>
+            <p class="eyebrow">Order Bucket</p>
+            <h2 id="cartCount">0 items</h2>
+          </div>
+          <strong id="cartTotal">JPY 0</strong>
+        </div>
+        <div class="cartItems" id="cartItems"></div>
+        <button class="primaryButton" id="placeOrderButton" type="button">Place Order Now</button>
+      </section>
+
+      <section class="appView" id="historyView" data-panel="history">
+        <div class="viewHeader">
+          <div>
+            <p class="eyebrow">Order History</p>
+            <h2>Current table session</h2>
+          </div>
+        </div>
+        <div class="historyList" id="historyList"></div>
+      </section>
+
+      <section class="appView" id="staffView" data-panel="staff">
+        <div class="staffPanel">
+          <p class="eyebrow">Call Staff</p>
+          <h2>Need help at the table?</h2>
+          <p>Send a quiet staff request for assistance, water, cleanup, or anything else.</p>
+          <button class="primaryButton" id="callStaffButton" type="button">Call Staff</button>
+        </div>
+      </section>
+
+      <section class="appView" id="checkoutPanel" data-panel="checkout">
+        <div class="viewHeader">
+          <div>
+            <p class="eyebrow">Checkout</p>
+            <h2>Bill summary</h2>
+          </div>
+        </div>
         <div class="totals" id="totals"></div>
         <label class="splitControl" id="billSplit">
           Split bill
           <input id="splitCount" type="number" min="1" max="12" value="1" />
         </label>
         <div class="splitResult" id="splitResult"></div>
-        <div class="paymentQr" id="paymentQr">PAYMENT QR</div>
+        <div class="checkoutBarcode" id="checkoutBarcode" aria-label="Checkout barcode"></div>
       </section>
     </main>
 
-    <aside class="cartSheet" id="cartSheet" aria-label="Cart">
-      <div class="cartHeader">
+    <div class="drawerBackdrop" id="drawerBackdrop"></div>
+    <aside class="categoryDrawer" id="categoryDrawer" aria-label="Menu categories">
+      <div class="drawerHeader">
         <div>
-          <p class="eyebrow">Cart</p>
-          <strong id="cartCount">0 items</strong>
+          <p class="eyebrow">Menu</p>
+          <h2>Categories</h2>
         </div>
-        <strong id="cartTotal">JPY 0</strong>
+        <button class="iconButton" id="closeCategoryDrawer" type="button" aria-label="Close categories">x</button>
       </div>
-      <div class="cartItems" id="cartItems"></div>
-      <button class="primaryButton" id="placeOrderButton" type="button">Place Order Now</button>
+      <div class="categoryList" id="categoryList"></div>
     </aside>
+
+    <nav class="bottomNav" id="bottomNav" aria-label="Primary">
+      <button class="navItem active" type="button" data-view="menu">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v2H4V5Zm0 6h16v2H4v-2Zm0 6h10v2H4v-2Z"/></svg>
+        <span>Menu</span>
+      </button>
+      <button class="navItem" type="button" data-view="bucket">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 18a2 2 0 1 0 0 4 2 2 0 0 0 0-4Zm10 0a2 2 0 1 0 0 4 2 2 0 0 0 0-4ZM3 3h2l2.2 10.4A3 3 0 0 0 10.1 16H18v-2h-7.9a1 1 0 0 1-1-.8L8.8 12H18l3-7H7.3L6.7 3H3v2Z"/></svg>
+        <span>Order Bucket</span>
+      </button>
+      <button class="navItem" type="button" data-view="history">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9h-2a7 7 0 1 1-2.1-5H14v2h6V3h-2v2.1A9 9 0 0 0 12 3Zm-1 4v6l5 3 .9-1.6-3.9-2.3V7h-2Z"/></svg>
+        <span>Order History</span>
+      </button>
+      <button class="navItem" type="button" data-view="staff">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a6 6 0 0 0-6 6v3.5L4 16v1h16v-1l-2-3.5V9a6 6 0 0 0-6-6Zm0 18a3 3 0 0 0 2.8-2H9.2A3 3 0 0 0 12 21Z"/></svg>
+        <span>Call Staff</span>
+      </button>
+      <button class="navItem" type="button" data-view="checkout">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14v16H5V4Zm2 2v12h10V6H7Zm2 2h6v2H9V8Zm0 4h6v2H9v-2Z"/></svg>
+        <span>Checkout</span>
+      </button>
+    </nav>
 
     <div class="toast" id="toast" role="status"></div>
     <script src="/app.js"></script>
