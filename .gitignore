@@ -3,5 +3,6 @@ apps/*/.env
 node_modules/
 apps/*/node_modules/
 .worktrees/
+.superpowers/
 .DS_Store
 npm-debug.log
