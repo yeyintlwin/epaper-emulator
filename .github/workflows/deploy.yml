@@ -6,7 +6,7 @@ on:
 
 jobs:
   deploy:
-    runs-on: [self-hosted, linux, x64, epaper-hub]
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
@@ -17,16 +17,29 @@ jobs:
       - run: npm ci
       - run: npm test
 
+      - name: Install SSH key
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.LIGHTSAIL_SSH_KEY }}" > ~/.ssh/lightsail.pem
+          chmod 600 ~/.ssh/lightsail.pem
+          ssh-keyscan -H "${{ secrets.LIGHTSAIL_HOST }}" >> ~/.ssh/known_hosts
+
+      - name: Upload app
+        run: |
+          set -euo pipefail
+          tar --exclude='.git' --exclude='node_modules' --exclude='.env' -czf /tmp/epaper-emulator.tgz .
+          ssh -i ~/.ssh/lightsail.pem "${{ secrets.LIGHTSAIL_USER }}@${{ secrets.LIGHTSAIL_HOST }}" 'mkdir -p ~/epaper-emulator'
+          scp -i ~/.ssh/lightsail.pem /tmp/epaper-emulator.tgz "${{ secrets.LIGHTSAIL_USER }}@${{ secrets.LIGHTSAIL_HOST }}:~/epaper-emulator/app.tgz"
+
       - name: Deploy on Lightsail
         run: |
           set -euo pipefail
-          mkdir -p ~/epaper-emulator
-          rsync -a --delete \
-            --exclude='.git' \
-            --exclude='node_modules' \
-            --exclude='.env' \
-            ./ ~/epaper-emulator/
+          ssh -i ~/.ssh/lightsail.pem "${{ secrets.LIGHTSAIL_USER }}@${{ secrets.LIGHTSAIL_HOST }}" <<'EOF'
+          set -euo pipefail
           cd ~/epaper-emulator
+          tar -xzf app.tgz
           test -f .env
           docker compose up -d --build
           docker image prune -f
+          EOF
