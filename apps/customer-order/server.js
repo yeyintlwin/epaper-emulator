@@ -7,6 +7,14 @@ const { createOrderStore, MAX_TABLE_NUMBER } = require("./order-store");
 
 const PUBLIC_ROOT = path.join(__dirname, "public");
 
+function createConfiguredEpaperClient() {
+  return createEpaperClient({
+    hubUrl: process.env.EPAPER_HUB_URL,
+    apiKey: process.env.EPAPER_API_KEY || process.env.API_KEY,
+    orderBaseUrl: process.env.ORDER_BASE_URL
+  });
+}
+
 function loadDotEnv(file = path.join(__dirname, ".env")) {
   if (!fs.existsSync(file)) return;
   for (const line of fs.readFileSync(file, "utf8").split(/\r?\n/)) {
@@ -82,11 +90,7 @@ function createServer(options = {}) {
   const pendingEpaperTables = new Set();
   const tableDisplayUpdates = new Map();
   const tableDisplayApiKey = options.tableDisplayApiKey ?? process.env.TABLE_DISPLAY_API_KEY;
-  const epaperClient = options.epaperClient || createEpaperClient({
-    hubUrl: process.env.EPAPER_HUB_URL,
-    apiKey: process.env.EPAPER_API_KEY || process.env.API_KEY,
-    orderBaseUrl: process.env.ORDER_BASE_URL
-  });
+  const epaperClient = options.epaperClient || createConfiguredEpaperClient();
 
   function runTableDisplayUpdate(tableNumber, update) {
     const previous = tableDisplayUpdates.get(tableNumber) || Promise.resolve();
@@ -228,12 +232,49 @@ function createServer(options = {}) {
   return server;
 }
 
+async function initializeTableDisplays(options = {}) {
+  const epaperClient = options.epaperClient;
+  const attempts = options.attempts || 3;
+  const sleep = options.sleep || ((milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds)));
+  const retryDelayMs = options.retryDelayMs ?? 1000;
+
+  await Promise.all(Array.from({ length: MAX_TABLE_NUMBER }, async (_, index) => {
+    const tableNumber = index + 1;
+    for (let attempt = 1; attempt <= attempts; attempt += 1) {
+      try {
+        const result = await epaperClient.updateTableWelcome(tableNumber);
+        if (result?.skipped) throw new Error("E-paper hub is not configured");
+        return;
+      } catch (error) {
+        if (attempt === attempts) {
+          throw new Error(`Failed to initialize e-paper table ${tableNumber}`, { cause: error });
+        }
+        await sleep(retryDelayMs);
+      }
+    }
+  }));
+}
+
+async function start(options = {}) {
+  const epaperClient = options.epaperClient || createConfiguredEpaperClient();
+  const server = options.server || createServer({ ...options, epaperClient });
+  const port = options.port ?? Number(process.env.PORT || 3100);
+  const listen = options.listen || ((httpServer, configuredPort) => httpServer.listen(configuredPort));
+
+  await initializeTableDisplays({ ...options, epaperClient });
+  await listen(server, port);
+  return server;
+}
+
 if (require.main === module) {
   loadDotEnv();
-  const port = Number(process.env.PORT || 3100);
-  createServer().listen(port, () => {
+  start().then(() => {
+    const port = Number(process.env.PORT || 3100);
     console.log(`Customer order app listening on http://localhost:${port}`);
+  }).catch((error) => {
+    console.error(error.message);
+    process.exitCode = 1;
   });
 }
 
-module.exports = { createServer, loadDotEnv };
+module.exports = { createServer, initializeTableDisplays, loadDotEnv, start };

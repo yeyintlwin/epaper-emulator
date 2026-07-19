@@ -1,6 +1,6 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
-const { createServer } = require("../server");
+const { createServer, initializeTableDisplays, start } = require("../server");
 
 function displayClient(updateTableWelcome) {
   return {
@@ -8,6 +8,68 @@ function displayClient(updateTableWelcome) {
     updateTableInUse: async () => ({ ok: true })
   };
 }
+
+test("startup initializes all twelve Welcome displays before listening", async () => {
+  const updates = [];
+  let listened = false;
+  const pending = [];
+  const epaperClient = {
+    updateTableWelcome(tableNumber) {
+      updates.push(tableNumber);
+      return new Promise((resolve) => pending.push(resolve));
+    }
+  };
+
+  const starting = start({
+    epaperClient,
+    port: 0,
+    listen: () => { listened = true; }
+  });
+  await new Promise(setImmediate);
+
+  assert.deepEqual(updates, Array.from({ length: 12 }, (_, index) => index + 1));
+  assert.equal(listened, false);
+  pending.forEach((resolve) => resolve({ ok: true }));
+  await starting;
+  assert.equal(listened, true);
+});
+
+test("startup retries a transient display failure", async () => {
+  const attempts = new Map();
+  await initializeTableDisplays({
+    epaperClient: {
+      async updateTableWelcome(tableNumber) {
+        const count = (attempts.get(tableNumber) || 0) + 1;
+        attempts.set(tableNumber, count);
+        if (tableNumber === 7 && count === 1) throw new Error("temporary");
+        return { ok: true };
+      }
+    },
+    attempts: 2,
+    sleep: async () => {}
+  });
+
+  assert.equal(attempts.get(7), 2);
+  assert.equal([...attempts.values()].reduce((sum, count) => sum + count, 0), 13);
+});
+
+test("startup failure prevents the HTTP listener", async () => {
+  let listened = false;
+  await assert.rejects(() => start({
+    epaperClient: { updateTableWelcome: async () => { throw new Error("offline"); } },
+    attempts: 2,
+    sleep: async () => {},
+    listen: () => { listened = true; }
+  }), /Failed to initialize e-paper table/);
+  assert.equal(listened, false);
+});
+
+test("startup rejects an unconfigured e-paper client", async () => {
+  await assert.rejects(() => initializeTableDisplays({
+    epaperClient: { updateTableWelcome: async () => ({ skipped: true }) },
+    attempts: 1
+  }), /Failed to initialize e-paper table/);
+});
 
 test("placing first order updates e-paper once and keeps slip for later orders", async () => {
   const epaperUpdates = [];
