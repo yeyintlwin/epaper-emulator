@@ -75,6 +75,12 @@ curl -X POST http://SERVER_IP:3000/api/update \
 
 The web designer uses this compact format automatically. The server still accepts the older debug formats, `bitmap` rows and `pixels`, for manual testing.
 
+Send 12 demo screens with different icon-style pixel art:
+
+```bash
+EPAPER_URL=https://epaper-hub.yeyintlwin.com API_KEY=your-key npm run demo
+```
+
 Older debug pixel payload:
 
 ```json
