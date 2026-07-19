@@ -51,9 +51,9 @@ The admin interface must support menu item management, price changes, daily sale
 
 ## Deployment Shape
 
-The Lightsail server should keep only the runtime deployment files in `~/epaper-emulator`:
+The Lightsail server should keep only the runtime deployment files in `~/restaurant-order-system`:
 
 - `docker-compose.yml`
 - optional `config/`
 
-The environment file remains outside that folder at `~/epaper-emulator.env`.
+The environment file remains outside that folder at `~/restaurant-order-system.env`.

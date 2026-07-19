@@ -18,7 +18,9 @@ test("Docker Compose exposes app only on localhost for Nginx proxy", () => {
   const compose = fs.readFileSync(path.join(appRoot, "docker-compose.yml"), "utf8");
 
   assert.match(compose, /127\.0\.0\.1:3000:3000/);
-  assert.match(compose, /\$\{EPAPER_IMAGE:-epaper-emulator\}/);
+  assert.match(compose, /epaper-hub:/);
+  assert.match(compose, /\$\{EPAPER_IMAGE:-epaper-hub\}/);
+  assert.match(compose, /container_name: epaper-hub/);
   assert.match(compose, /\$\{EPAPER_ENV_FILE:-\.env\}/);
   assert.match(compose, /SCREEN_STORE_FILE: \/data\/screens\.json/);
   assert.match(compose, /epaper-data:\/data/);
@@ -37,14 +39,19 @@ test("GitHub Actions deploys from GitHub-hosted runner over SSH", () => {
   assert.match(workflow, /npm --prefix apps\/epaper-hub ci/);
   assert.match(workflow, /npm --prefix apps\/epaper-hub test/);
   assert.doesNotMatch(workflow, /working-directory: apps\/epaper-hub/);
-  assert.match(workflow, /docker build -t epaper-emulator:\$\{\{ github\.sha \}\} apps\/epaper-hub/);
-  assert.match(workflow, /docker save epaper-emulator:\$\{\{ github\.sha \}\}/);
-  assert.match(workflow, /docker load -i \/tmp\/epaper-emulator-image\.tgz/);
+  assert.match(workflow, /docker build -t epaper-hub:\$\{\{ github\.sha \}\} apps\/epaper-hub/);
+  assert.match(workflow, /docker save epaper-hub:\$\{\{ github\.sha \}\}/);
+  assert.match(workflow, /docker load -i \/tmp\/epaper-hub-image\.tgz/);
   assert.match(workflow, /scp -i/);
   assert.match(workflow, /apps\/epaper-hub\/docker-compose\.yml/);
   assert.match(workflow, /ssh -i/);
-  assert.match(workflow, /EPAPER_ENV_FILE=\.\.\/epaper-emulator\.env/);
-  assert.match(workflow, /find ~\/epaper-emulator -mindepth 1 -maxdepth 1/);
-  assert.doesNotMatch(workflow, /docker build -t epaper-emulator:\$\{\{ github\.sha \}\} \./);
+  assert.match(workflow, /~\/restaurant-order-system/);
+  assert.match(workflow, /restaurant-order-system\.env/);
+  assert.match(workflow, /docker compose down \|\| docker stop epaper-emulator \|\| true/);
+  assert.match(workflow, /docker volume create restaurant-order-system_epaper-data/);
+  assert.match(workflow, /epaper-emulator_epaper-data/);
+  assert.match(workflow, /EPAPER_ENV_FILE=\.\.\/restaurant-order-system\.env/);
+  assert.match(workflow, /find ~\/restaurant-order-system -mindepth 1 -maxdepth 1/);
+  assert.doesNotMatch(workflow, /docker build -t epaper-hub:\$\{\{ github\.sha \}\} \./);
   assert.doesNotMatch(workflow, /app\.tgz|tar -xzf|APP_API_KEY|cat > \.env|self-hosted/);
 });

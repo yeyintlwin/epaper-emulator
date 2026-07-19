@@ -1,5 +1,5 @@
 {
-  "name": "epaper-emulator",
+  "name": "epaper-hub",
   "version": "1.0.0",
   "description": "Web emulator and secure API for 12 three-color e-paper displays.",
   "main": "server.js",

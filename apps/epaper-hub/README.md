@@ -109,8 +109,8 @@ Older debug pixel payload:
 ## AWS Lightsail Ubuntu
 
 1. Install Docker and Docker Compose.
-2. Keep runtime config outside the deploy folder at `~/epaper-emulator.env`.
-3. Keep only `~/epaper-emulator/docker-compose.yml` on the server, plus `~/epaper-emulator/config/` if needed later.
+2. Keep runtime config outside the deploy folder at `~/restaurant-order-system.env`.
+3. Keep only `~/restaurant-order-system/docker-compose.yml` on the server, plus `~/restaurant-order-system/config/` if needed later.
 4. GitHub Actions builds the Docker image, uploads it, and runs `docker compose up -d --no-build`.
 5. The latest screen state is stored inside the Docker named volume `epaper-data`, not in the project folder.
 6. Open ports `80` and `443` in the Lightsail firewall.

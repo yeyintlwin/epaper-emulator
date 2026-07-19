@@ -8,4 +8,4 @@ Current production service:
 - Host: AWS Lightsail Ubuntu
 - Runtime: Docker Compose
 
-The deployed e-paper hub folder should contain only `docker-compose.yml` and optional `config/`. Runtime secrets stay in `~/epaper-emulator.env`.
+The deployed project folder is `~/restaurant-order-system`. It should contain only `docker-compose.yml` and optional `config/`. Runtime secrets stay in `~/restaurant-order-system.env`.

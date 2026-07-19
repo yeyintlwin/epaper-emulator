@@ -21,8 +21,8 @@ jobs:
       - name: Build image
         run: |
           set -euo pipefail
-          docker build -t epaper-emulator:${{ github.sha }} apps/epaper-hub
-          docker save epaper-emulator:${{ github.sha }} | gzip > /tmp/epaper-emulator-image.tgz
+          docker build -t epaper-hub:${{ github.sha }} apps/epaper-hub
+          docker save epaper-hub:${{ github.sha }} | gzip > /tmp/epaper-hub-image.tgz
 
       - name: Install SSH key
         run: |
@@ -35,23 +35,43 @@ jobs:
       - name: Upload app
         run: |
           set -euo pipefail
-          ssh -i ~/.ssh/lightsail.pem "${{ secrets.LIGHTSAIL_USER }}@${{ secrets.LIGHTSAIL_HOST }}" 'mkdir -p ~/epaper-emulator'
-          scp -i ~/.ssh/lightsail.pem apps/epaper-hub/docker-compose.yml "${{ secrets.LIGHTSAIL_USER }}@${{ secrets.LIGHTSAIL_HOST }}:~/epaper-emulator/docker-compose.yml"
-          scp -i ~/.ssh/lightsail.pem /tmp/epaper-emulator-image.tgz "${{ secrets.LIGHTSAIL_USER }}@${{ secrets.LIGHTSAIL_HOST }}:/tmp/epaper-emulator-image.tgz"
+          ssh -i ~/.ssh/lightsail.pem "${{ secrets.LIGHTSAIL_USER }}@${{ secrets.LIGHTSAIL_HOST }}" 'mkdir -p ~/restaurant-order-system'
+          scp -i ~/.ssh/lightsail.pem apps/epaper-hub/docker-compose.yml "${{ secrets.LIGHTSAIL_USER }}@${{ secrets.LIGHTSAIL_HOST }}:~/restaurant-order-system/docker-compose.yml"
+          scp -i ~/.ssh/lightsail.pem /tmp/epaper-hub-image.tgz "${{ secrets.LIGHTSAIL_USER }}@${{ secrets.LIGHTSAIL_HOST }}:/tmp/epaper-hub-image.tgz"
 
       - name: Deploy on Lightsail
         run: |
           set -euo pipefail
           ssh -i ~/.ssh/lightsail.pem "${{ secrets.LIGHTSAIL_USER }}@${{ secrets.LIGHTSAIL_HOST }}" <<'EOF'
           set -euo pipefail
-          if [ ! -f ~/epaper-emulator.env ] && [ -f ~/epaper-emulator/.env ]; then
-            mv ~/epaper-emulator/.env ~/epaper-emulator.env
+          if [ -f ~/epaper-emulator/docker-compose.yml ]; then
+            cd ~/epaper-emulator
+            docker compose down || docker stop epaper-emulator || true
           fi
-          test -f ~/epaper-emulator.env
-          docker load -i /tmp/epaper-emulator-image.tgz
-          find ~/epaper-emulator -mindepth 1 -maxdepth 1 ! -name docker-compose.yml ! -name config -exec rm -rf {} +
-          cd ~/epaper-emulator
-          EPAPER_IMAGE=epaper-emulator:${{ github.sha }} EPAPER_ENV_FILE=../epaper-emulator.env docker compose up -d --no-build
+          if [ ! -f ~/restaurant-order-system.env ]; then
+            if [ -f ~/epaper-emulator.env ]; then
+              mv ~/epaper-emulator.env ~/restaurant-order-system.env
+            elif [ -f ~/restaurant-order-system/.env ]; then
+              mv ~/restaurant-order-system/.env ~/restaurant-order-system.env
+            elif [ -f ~/epaper-emulator/.env ]; then
+              mv ~/epaper-emulator/.env ~/restaurant-order-system.env
+            fi
+          fi
+          test -f ~/restaurant-order-system.env
+          if [ -d ~/epaper-emulator/config ] && [ ! -d ~/restaurant-order-system/config ]; then
+            mv ~/epaper-emulator/config ~/restaurant-order-system/config
+          fi
+          rm -rf ~/epaper-emulator
+          docker load -i /tmp/epaper-hub-image.tgz
+          docker volume create restaurant-order-system_epaper-data
+          if docker volume inspect epaper-emulator_epaper-data >/dev/null 2>&1; then
+            if ! docker run --rm -v restaurant-order-system_epaper-data:/to epaper-hub:${{ github.sha }} test -f /to/screens.json; then
+              docker run --rm -v epaper-emulator_epaper-data:/from:ro -v restaurant-order-system_epaper-data:/to epaper-hub:${{ github.sha }} sh -c 'cp -a /from/. /to/'
+            fi
+          fi
+          find ~/restaurant-order-system -mindepth 1 -maxdepth 1 ! -name docker-compose.yml ! -name config -exec rm -rf {} +
+          cd ~/restaurant-order-system
+          EPAPER_IMAGE=epaper-hub:${{ github.sha }} EPAPER_ENV_FILE=../restaurant-order-system.env docker compose up -d --no-build
           docker image prune -f
-          rm -f /tmp/epaper-emulator-image.tgz
+          rm -f /tmp/epaper-hub-image.tgz
           EOF
