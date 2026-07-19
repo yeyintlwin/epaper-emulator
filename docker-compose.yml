@@ -1,0 +1,9 @@
+services:
+  epaper-emulator:
+    build: .
+    container_name: epaper-emulator
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env

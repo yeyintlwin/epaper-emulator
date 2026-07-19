@@ -1,0 +1,384 @@
+:root {
+  color-scheme: light;
+  --ink: #151515;
+  --muted: #65717c;
+  --paper: #f7f7f2;
+  --line: #d8ddd2;
+  --red: #d62828;
+  --green: #2f6f4e;
+  --bg: #edf0e8;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 24px clamp(16px, 4vw, 48px);
+  border-bottom: 1px solid var(--line);
+  background: #fbfbf7;
+}
+
+.eyebrow {
+  margin: 0 0 4px;
+  color: var(--green);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+h1,
+h2 {
+  margin: 0;
+  letter-spacing: 0;
+}
+
+h1 {
+  font-size: clamp(28px, 4vw, 44px);
+}
+
+h2 {
+  font-size: 18px;
+}
+
+.status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 130px;
+  justify-content: flex-end;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.toggleButton {
+  width: auto;
+  padding: 8px 11px;
+  border-color: #aeb8aa;
+  background: #eef1ea;
+  color: var(--ink);
+}
+
+.dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #a4a9ad;
+}
+
+.dot.live {
+  background: var(--green);
+}
+
+.dot.offline {
+  background: var(--red);
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: minmax(296px, 1184px);
+  gap: 24px;
+  justify-content: center;
+  padding: 24px clamp(16px, 4vw, 48px) 48px;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(296px, 1fr));
+  gap: 18px;
+  align-content: start;
+}
+
+.device {
+  border: 1px solid #c8cec3;
+  background: #e4e6df;
+  padding: 10px;
+  border-radius: 8px;
+  box-shadow: 0 8px 22px rgba(31, 42, 32, 0.08);
+}
+
+.deviceHead {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.screen {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 296 / 128;
+  overflow: hidden;
+  background: var(--paper);
+  border: 2px solid #222;
+  image-rendering: pixelated;
+}
+
+.screen.black {
+  background: #121212;
+  color: #f8f8f1;
+}
+
+.screen.red {
+  background: var(--red);
+  color: #fff;
+}
+
+.screenCanvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  image-rendering: pixelated;
+}
+
+.screenInner {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 5%;
+  padding: 7%;
+  color: inherit;
+  text-align: center;
+}
+
+.screen.left .screenInner {
+  text-align: left;
+  align-items: flex-start;
+}
+
+.screen.right .screenInner {
+  text-align: right;
+  align-items: flex-end;
+}
+
+.screenTitle {
+  color: var(--red);
+  font-weight: 800;
+  font-size: clamp(11px, 1.6vw, 16px);
+  line-height: 1.05;
+}
+
+.screenText {
+  white-space: pre-line;
+  font-weight: 750;
+  line-height: 1.08;
+  overflow-wrap: anywhere;
+}
+
+.screenText.small {
+  font-size: clamp(12px, 1.7vw, 18px);
+}
+
+.screenText.medium {
+  font-size: clamp(16px, 2.3vw, 26px);
+}
+
+.screenText.large {
+  font-size: clamp(22px, 3vw, 36px);
+}
+
+.pixel {
+  position: absolute;
+  width: calc(100% / 296);
+  height: calc(100% / 128);
+}
+
+.pixel.black {
+  background: #111;
+}
+
+.pixel.red {
+  background: var(--red);
+}
+
+.panel {
+  position: fixed;
+  top: 104px;
+  right: 18px;
+  z-index: 20;
+  width: min(420px, calc(100vw - 24px));
+  max-height: calc(100vh - 122px);
+  overflow: auto;
+  align-self: start;
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fbfbf7;
+}
+
+.hidden {
+  display: none;
+}
+
+label {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 650;
+}
+
+input,
+select,
+textarea,
+button {
+  width: 100%;
+  border: 1px solid #c8cec3;
+  border-radius: 6px;
+  font: inherit;
+}
+
+input,
+select,
+textarea {
+  padding: 10px 11px;
+  background: #fff;
+  color: var(--ink);
+}
+
+textarea {
+  resize: vertical;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+button {
+  padding: 11px 14px;
+  border-color: #214b35;
+  background: #214b35;
+  color: white;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.buttonRow,
+.toolRow {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+.buttonRow {
+  grid-template-columns: 1fr 1fr;
+}
+
+.secondary {
+  border-color: #aeb8aa;
+  background: #eef1ea;
+  color: var(--ink);
+}
+
+.editor {
+  overflow: auto;
+  border: 1px solid #aeb8aa;
+  border-radius: 6px;
+  padding: 10px;
+  background:
+    linear-gradient(45deg, #dde2d8 25%, transparent 25%),
+    linear-gradient(-45deg, #dde2d8 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #dde2d8 75%),
+    linear-gradient(-45deg, transparent 75%, #dde2d8 75%);
+  background-position:
+    0 0,
+    0 8px,
+    8px -8px,
+    -8px 0;
+  background-size: 16px 16px;
+}
+
+#pixelCanvas {
+  display: block;
+  width: 888px;
+  height: 384px;
+  max-width: none;
+  border: 2px solid #222;
+  background: var(--paper);
+  image-rendering: pixelated;
+  cursor: crosshair;
+}
+
+.swatch {
+  min-height: 40px;
+  border: 2px solid #9ba49a;
+  background: #111;
+}
+
+.swatch.red {
+  background: var(--red);
+}
+
+.swatch.white {
+  background: var(--paper);
+}
+
+.swatch.active {
+  outline: 3px solid #214b35;
+  outline-offset: 2px;
+}
+
+button:disabled {
+  opacity: 0.7;
+  cursor: wait;
+}
+
+pre {
+  min-height: 76px;
+  margin: 0;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 10px;
+  background: #f1f3ed;
+  color: #334;
+  font-size: 12px;
+  white-space: pre-wrap;
+}
+
+@media (max-width: 980px) {
+  .layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 560px) {
+  .topbar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .status {
+    justify-content: flex-start;
+  }
+
+  .grid {
+    grid-template-columns: 1fr;
+  }
+
+  .row {
+    grid-template-columns: 1fr;
+  }
+}
