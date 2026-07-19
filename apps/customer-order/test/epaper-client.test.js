@@ -36,6 +36,31 @@ test("updates e-paper status through server-side authenticated request", async (
   );
 });
 
+test("renders a Welcome QR that opens the requested table order page", async () => {
+  const requests = [];
+  const client = createEpaperClient({
+    hubUrl: "https://epaper-hub.example.test/",
+    apiKey: "secret-key",
+    orderBaseUrl: "https://order.example.test/food?campaign=summer",
+    fetchImpl: async (url, options) => {
+      requests.push({ url, options });
+      return { ok: true, json: async () => ({ ok: true }) };
+    }
+  });
+
+  await client.updateTableWelcome(7);
+
+  assert.equal(requests[0].url, "https://epaper-hub.example.test/api/epapers/7");
+  assert.deepEqual(
+    JSON.parse(requests[0].options.body),
+    renderTableDisplay({
+      tableNumber: 7,
+      status: "Welcome",
+      url: "https://order.example.test/food?campaign=summer&table=7"
+    })
+  );
+});
+
 test("skips e-paper update when hub url or api key is missing", async () => {
   const client = createEpaperClient({
     hubUrl: "",
@@ -48,4 +73,6 @@ test("skips e-paper update when hub url or api key is missing", async () => {
   const result = await client.updateTableInUse(1, { slipNumber: "SLIP-1" });
 
   assert.deepEqual(result, { skipped: true });
+  assert.deepEqual(await client.updateTableWelcome(1), { skipped: true });
+  assert.deepEqual(await client.updateTableInUse(1), { skipped: true });
 });

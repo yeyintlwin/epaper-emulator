@@ -7,20 +7,27 @@ function createEpaperClient({ hubUrl, apiKey, orderBaseUrl, fetchImpl = fetch } 
     ? createEpaperHubSdk({ baseUrl: normalizedHubUrl, apiKey: token, fetchImpl })
     : null;
 
-  async function updateTableInUse(tableNumber, session) {
-    if (!sdk) return { skipped: true };
+  function orderingUrlFor(tableNumber) {
     const orderingUrl = new URL(orderBaseUrl || "https://order.yeyintlwin.com");
     orderingUrl.searchParams.set("table", tableNumber);
+    return orderingUrl.toString();
+  }
+
+  async function updateTableStatus(tableNumber, status) {
+    if (!sdk) return { skipped: true };
 
     return sdk.updateTableDisplay({
       epaperId: tableNumber,
       tableNumber,
-      status: "Table is in use",
-      url: orderingUrl.toString()
+      status,
+      url: orderingUrlFor(tableNumber)
     });
   }
 
-  return { updateTableInUse };
+  return {
+    updateTableWelcome: (tableNumber) => updateTableStatus(tableNumber, "Welcome"),
+    updateTableInUse: (tableNumber) => updateTableStatus(tableNumber, "Table is in use")
+  };
 }
 
 module.exports = { createEpaperClient };
