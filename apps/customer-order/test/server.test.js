@@ -1,4 +1,5 @@
 const assert = require("node:assert/strict");
+const { EventEmitter } = require("node:events");
 const test = require("node:test");
 const { createServer, initializeTableDisplays, start } = require("../server");
 
@@ -34,23 +35,65 @@ test("startup initializes all twelve Welcome displays before listening", async (
   assert.equal(listened, true);
 });
 
-test("startup retries a transient display failure", async () => {
+test("startup retries a transient 503 display failure", async () => {
   const attempts = new Map();
+  let sleeps = 0;
   await initializeTableDisplays({
     epaperClient: {
       async updateTableWelcome(tableNumber) {
         const count = (attempts.get(tableNumber) || 0) + 1;
         attempts.set(tableNumber, count);
-        if (tableNumber === 7 && count === 1) throw new Error("temporary");
+        if (tableNumber === 7 && count === 1) throw new Error("E-paper hub update failed with 503");
         return { ok: true };
       }
     },
     attempts: 2,
-    sleep: async () => {}
+    sleep: async () => { sleeps += 1; }
   });
 
   assert.equal(attempts.get(7), 2);
   assert.equal([...attempts.values()].reduce((sum, count) => sum + count, 0), 13);
+  assert.equal(sleeps, 1);
+});
+
+test("startup does not retry a permanent 401 display failure", async () => {
+  const attempts = new Map();
+  let sleeps = 0;
+
+  await assert.rejects(() => initializeTableDisplays({
+    epaperClient: {
+      async updateTableWelcome(tableNumber) {
+        attempts.set(tableNumber, (attempts.get(tableNumber) || 0) + 1);
+        if (tableNumber === 7) throw new Error("E-paper hub update failed with 401");
+        return { ok: true };
+      }
+    },
+    attempts: 3,
+    sleep: async () => { sleeps += 1; }
+  }), /Failed to initialize e-paper table 7/);
+
+  assert.equal(attempts.get(7), 1);
+  assert.equal(sleeps, 0);
+});
+
+test("startup does not retry a validation display failure", async () => {
+  let attempts = 0;
+
+  await assert.rejects(() => initializeTableDisplays({
+    epaperClient: {
+      async updateTableWelcome(tableNumber) {
+        if (tableNumber === 7) {
+          attempts += 1;
+          throw new Error("url must be an http or https URL");
+        }
+        return { ok: true };
+      }
+    },
+    attempts: 3,
+    sleep: async () => {}
+  }), /Failed to initialize e-paper table 7/);
+
+  assert.equal(attempts, 1);
 });
 
 test("startup failure prevents the HTTP listener", async () => {
@@ -65,10 +108,126 @@ test("startup failure prevents the HTTP listener", async () => {
 });
 
 test("startup rejects an unconfigured e-paper client", async () => {
+  let updates = 0;
   await assert.rejects(() => initializeTableDisplays({
-    epaperClient: { updateTableWelcome: async () => ({ skipped: true }) },
-    attempts: 1
+    epaperClient: { updateTableWelcome: async () => { updates += 1; return { skipped: true }; } },
+    attempts: 3,
+    sleep: async () => {}
   }), /Failed to initialize e-paper table/);
+  assert.equal(updates, 12);
+});
+
+test("startup rejects invalid attempt counts before display updates", async () => {
+  for (const attempts of [0, -1, 1.5, "3", NaN]) {
+    let updates = 0;
+    await assert.rejects(() => initializeTableDisplays({
+      epaperClient: { updateTableWelcome: async () => { updates += 1; } },
+      attempts
+    }), /attempts must be a positive integer/);
+    assert.equal(updates, 0);
+  }
+});
+
+test("default startup rejects missing production configuration before updates or listening", async () => {
+  const originalEnvironment = { ...process.env };
+  const originalFetch = globalThis.fetch;
+  const configuredEnvironment = {
+    EPAPER_HUB_URL: "https://epaper-hub.example.test",
+    EPAPER_API_KEY: "epaper-key",
+    API_KEY: "hub-key",
+    ORDER_BASE_URL: "https://order.example.test"
+  };
+  try {
+    let fetchCalls = 0;
+    globalThis.fetch = async () => {
+      fetchCalls += 1;
+      throw new Error("unexpected e-paper request");
+    };
+    for (const { missing } of [
+      { missing: ["EPAPER_HUB_URL"] },
+      { missing: ["EPAPER_API_KEY", "API_KEY"] },
+      { missing: ["ORDER_BASE_URL"] }
+    ]) {
+      Object.assign(process.env, configuredEnvironment);
+      for (const variable of missing) delete process.env[variable];
+      let listened = false;
+      await assert.rejects(() => start({
+        server: {},
+        listen: () => { listened = true; },
+        attempts: 1,
+        sleep: async () => {}
+      }), /E-paper startup configuration is incomplete/);
+      assert.equal(listened, false);
+    }
+    assert.equal(fetchCalls, 0);
+  } finally {
+    globalThis.fetch = originalFetch;
+    for (const name of Object.keys(process.env)) delete process.env[name];
+    Object.assign(process.env, originalEnvironment);
+  }
+});
+
+test("startup accepts an injected e-paper client without production configuration", async () => {
+  const originalEnvironment = { ...process.env };
+  try {
+    delete process.env.EPAPER_HUB_URL;
+    delete process.env.EPAPER_API_KEY;
+    delete process.env.API_KEY;
+    delete process.env.ORDER_BASE_URL;
+    let updates = 0;
+    let listened = false;
+
+    await start({
+      epaperClient: {
+        updateTableWelcome: async () => { updates += 1; return { ok: true }; }
+      },
+      server: {},
+      listen: () => { listened = true; }
+    });
+
+    assert.equal(updates, 12);
+    assert.equal(listened, true);
+  } finally {
+    for (const name of Object.keys(process.env)) delete process.env[name];
+    Object.assign(process.env, originalEnvironment);
+  }
+});
+
+test("default startup listener resolves only after listening", async () => {
+  const server = new EventEmitter();
+  let ready;
+  server.listen = (_port, callback) => {
+    ready = callback;
+    return server;
+  };
+  let settled = false;
+  const starting = start({
+    epaperClient: { updateTableWelcome: async () => ({ ok: true }) },
+    server,
+    port: 0
+  }).then(() => { settled = true; });
+
+  await new Promise(setImmediate);
+  assert.equal(settled, false);
+  ready();
+  await starting;
+  assert.equal(settled, true);
+});
+
+test("default startup listener rejects asynchronous errors", async () => {
+  const server = new EventEmitter();
+  const failure = new Error("address unavailable");
+  server.on("error", () => {});
+  server.listen = () => {
+    process.nextTick(() => server.emit("error", failure));
+    return server;
+  };
+
+  await assert.rejects(() => start({
+    epaperClient: { updateTableWelcome: async () => ({ ok: true }) },
+    server,
+    port: 0
+  }), /address unavailable/);
 });
 
 test("placing first order updates e-paper once and keeps slip for later orders", async () => {

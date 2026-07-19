@@ -7,11 +7,17 @@ const { createOrderStore, MAX_TABLE_NUMBER } = require("./order-store");
 
 const PUBLIC_ROOT = path.join(__dirname, "public");
 
-function createConfiguredEpaperClient() {
+function createConfiguredEpaperClient(requireStartupConfiguration = false) {
+  const hubUrl = process.env.EPAPER_HUB_URL;
+  const apiKey = process.env.EPAPER_API_KEY || process.env.API_KEY;
+  const orderBaseUrl = process.env.ORDER_BASE_URL;
+  if (requireStartupConfiguration && (!hubUrl || !apiKey || !orderBaseUrl)) {
+    throw new Error("E-paper startup configuration is incomplete");
+  }
   return createEpaperClient({
-    hubUrl: process.env.EPAPER_HUB_URL,
-    apiKey: process.env.EPAPER_API_KEY || process.env.API_KEY,
-    orderBaseUrl: process.env.ORDER_BASE_URL
+    hubUrl,
+    apiKey,
+    orderBaseUrl
   });
 }
 
@@ -234,7 +240,10 @@ function createServer(options = {}) {
 
 async function initializeTableDisplays(options = {}) {
   const epaperClient = options.epaperClient;
-  const attempts = options.attempts || 3;
+  const attempts = options.attempts ?? 3;
+  if (!Number.isInteger(attempts) || attempts < 1) {
+    throw new Error("attempts must be a positive integer");
+  }
   const sleep = options.sleep || ((milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds)));
   const retryDelayMs = options.retryDelayMs ?? 1000;
 
@@ -243,10 +252,14 @@ async function initializeTableDisplays(options = {}) {
     for (let attempt = 1; attempt <= attempts; attempt += 1) {
       try {
         const result = await epaperClient.updateTableWelcome(tableNumber);
-        if (result?.skipped) throw new Error("E-paper hub is not configured");
+        if (result?.skipped) {
+          const error = new Error("E-paper hub is not configured");
+          error.code = "EPAPER_CONFIGURATION";
+          throw error;
+        }
         return;
       } catch (error) {
-        if (attempt === attempts) {
+        if (attempt === attempts || !isTransientEpaperError(error)) {
           throw new Error(`Failed to initialize e-paper table ${tableNumber}`, { cause: error });
         }
         await sleep(retryDelayMs);
@@ -255,11 +268,38 @@ async function initializeTableDisplays(options = {}) {
   }));
 }
 
+function isTransientEpaperError(error) {
+  const message = String(error?.message || "");
+  if (
+    error?.code === "EPAPER_CONFIGURATION" ||
+    error?.code === "ERR_INVALID_URL" ||
+    /^(?:baseUrl|apiKey|epaperId|tableNumber|status|url)\b.*\b(?:must|is required)\b|^url is too long for the e-paper QR area$|^Invalid URL$/.test(message)
+  ) return false;
+  const status = /(?:^|\D)([1-5]\d{2})(?:\D|$)/.exec(message);
+  if (!status) return true;
+  const value = Number(status[1]);
+  return value === 408 || value === 429 || value >= 500;
+}
+
+function listenServer(server, port) {
+  return new Promise((resolve, reject) => {
+    const onError = (error) => {
+      server.removeListener("error", onError);
+      reject(error);
+    };
+    server.once("error", onError);
+    server.listen(port, () => {
+      server.removeListener("error", onError);
+      resolve();
+    });
+  });
+}
+
 async function start(options = {}) {
-  const epaperClient = options.epaperClient || createConfiguredEpaperClient();
+  const epaperClient = options.epaperClient || createConfiguredEpaperClient(true);
   const server = options.server || createServer({ ...options, epaperClient });
   const port = options.port ?? Number(process.env.PORT || 3100);
-  const listen = options.listen || ((httpServer, configuredPort) => httpServer.listen(configuredPort));
+  const listen = options.listen || listenServer;
 
   await initializeTableDisplays({ ...options, epaperClient });
   await listen(server, port);
