@@ -97,4 +97,4 @@ Older debug pixel payload:
 4. Run `docker compose up -d --build`.
 5. Open ports `80` and `443` in the Lightsail firewall.
 
-Set `DOMAIN=epaper-hub.yeyintlwin.com` in `.env`. Caddy terminates HTTPS and proxies to the app.
+Run the app on `127.0.0.1:3000` and proxy `epaper-hub.yeyintlwin.com` to it with Nginx.

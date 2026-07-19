@@ -1,4 +1,0 @@
-{$DOMAIN} {
-  encode gzip
-  reverse_proxy epaper-emulator:3000
-}
