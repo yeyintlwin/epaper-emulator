@@ -42,5 +42,5 @@ test("mobile customer UI uses native-style bottom navigation and a menu category
   assert.match(js, /openDrawer/);
   assert.match(js, /renderHistory/);
   assert.match(js, /renderBarcode/);
-  assert.doesNotMatch(js, /EPAPER_API_KEY|API_KEY|Bearer/);
+  assert.doesNotMatch(js, /EPAPER_API_KEY|TABLE_DISPLAY_API_KEY|API_KEY|Bearer/);
 });
