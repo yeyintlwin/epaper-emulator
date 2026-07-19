@@ -24,7 +24,7 @@ EPAPER_API_KEY=replace-with-epaper-hub-api-key
 TABLE_DISPLAY_API_KEY=replace-with-a-separate-long-random-secret
 ```
 
-`EPAPER_API_KEY` stays on the server. The browser never receives it. If you already have the e-paper hub secret as `API_KEY`, the customer app can reuse that instead. `ORDER_BASE_URL` is the public page encoded into each table QR code.
+`TABLE_DISPLAY_API_KEY`, `EPAPER_API_KEY`, and the `API_KEY` fallback are server-only credentials and are never exposed to browser code. `ORDER_BASE_URL` is the public page encoded into each table QR code.
 
 ## Initialize A Table Display
 
