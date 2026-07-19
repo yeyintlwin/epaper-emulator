@@ -16,3 +16,14 @@ test("Docker Compose exposes app only on localhost for Nginx proxy", () => {
   assert.match(compose, /127\.0\.0\.1:3000:3000/);
   assert.doesNotMatch(compose, /caddy:/);
 });
+
+test("GitHub Actions deploys from the Lightsail self-hosted runner", () => {
+  const workflow = fs.readFileSync(
+    path.join(__dirname, "..", ".github", "workflows", "deploy.yml"),
+    "utf8",
+  );
+
+  assert.match(workflow, /self-hosted/);
+  assert.match(workflow, /epaper-hub/);
+  assert.doesNotMatch(workflow, /LIGHTSAIL_SSH_KEY|APP_API_KEY|scp|ssh -i/);
+});
