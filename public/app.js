@@ -1,17 +1,6 @@
 const grid = document.querySelector("#screenGrid");
 const connectionDot = document.querySelector("#connectionDot");
 const connectionText = document.querySelector("#connectionText");
-const designerToggle = document.querySelector("#designerToggle");
-const designerPanel = document.querySelector("#designerPanel");
-const screenId = document.querySelector("#screenId");
-const sendButton = document.querySelector("#sendButton");
-const apiResult = document.querySelector("#apiResult");
-const editorCanvas = document.querySelector("#pixelCanvas");
-const editorCtx = editorCanvas.getContext("2d");
-const brushSize = document.querySelector("#brushSize");
-const zoomSize = document.querySelector("#zoomSize");
-const clearButton = document.querySelector("#clearButton");
-const fillButton = document.querySelector("#fillButton");
 
 const colors = {
   white: "#f7f7f2",
@@ -20,24 +9,7 @@ const colors = {
 };
 
 const state = new Map();
-const bitmap = Array.from({ length: 128 }, () => Array.from({ length: 296 }, () => "W"));
-let activeColor = "black";
-let drawing = false;
 let eventSource;
-
-if (designerToggle && designerPanel) {
-  designerToggle.addEventListener("click", () => {
-    const hidden = designerPanel.classList.toggle("hidden");
-    designerToggle.setAttribute("aria-expanded", String(!hidden));
-  });
-}
-
-for (let id = 1; id <= 12; id += 1) {
-  const option = document.createElement("option");
-  option.value = String(id);
-  option.textContent = `EPAPER ${id}`;
-  screenId.append(option);
-}
 
 function setConnection(status) {
   connectionDot.className = `dot ${status}`;
@@ -144,117 +116,9 @@ function connectEvents() {
   };
 }
 
-sendButton.addEventListener("click", async () => {
-  const key = document.querySelector("#apiKey").value.trim();
-  const body = {
-    title: document.querySelector("#title").value,
-    ...encodeBitmapRows(bitmap.map((row) => row.join("")))
-  };
-
-  sendButton.disabled = true;
-  apiResult.textContent = "Sending...";
-
-  try {
-    const response = await fetch(`/api/epapers/${screenId.value}`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${key}`
-      },
-      body: JSON.stringify(body)
-    });
-    const payload = await response.json();
-    if (payload.screen) renderScreen(payload.screen);
-    apiResult.textContent = JSON.stringify(payload, null, 2);
-  } catch (error) {
-    apiResult.textContent = String(error);
-  } finally {
-    sendButton.disabled = false;
-  }
-});
-
-function redrawEditor() {
-  const image = editorCtx.createImageData(296, 128);
-  for (let y = 0; y < 128; y += 1) {
-    for (let x = 0; x < 296; x += 1) {
-      const index = (y * 296 + x) * 4;
-      const color = bitmap[y][x] === "B" ? [17, 17, 17] : bitmap[y][x] === "R" ? [214, 40, 40] : [247, 247, 242];
-      image.data[index] = color[0];
-      image.data[index + 1] = color[1];
-      image.data[index + 2] = color[2];
-      image.data[index + 3] = 255;
-    }
-  }
-  editorCtx.putImageData(image, 0, 0);
-}
-
-function canvasPoint(event) {
-  const rect = editorCanvas.getBoundingClientRect();
-  return {
-    x: Math.floor(((event.clientX - rect.left) / rect.width) * 296),
-    y: Math.floor(((event.clientY - rect.top) / rect.height) * 128)
-  };
-}
-
-function drawAt(event) {
-  const point = canvasPoint(event);
-  const size = Number(brushSize.value);
-  const code = activeColor === "black" ? "B" : activeColor === "red" ? "R" : "W";
-  const radius = Math.floor(size / 2);
-  for (let y = point.y - radius; y < point.y - radius + size; y += 1) {
-    for (let x = point.x - radius; x < point.x - radius + size; x += 1) {
-      if (x >= 0 && x < 296 && y >= 0 && y < 128) bitmap[y][x] = code;
-    }
-  }
-  redrawEditor();
-}
-
-editorCanvas.addEventListener("pointerdown", (event) => {
-  drawing = true;
-  editorCanvas.setPointerCapture(event.pointerId);
-  drawAt(event);
-});
-
-editorCanvas.addEventListener("pointermove", (event) => {
-  if (drawing) drawAt(event);
-});
-
-editorCanvas.addEventListener("pointerup", () => {
-  drawing = false;
-});
-
-editorCanvas.addEventListener("pointerleave", () => {
-  drawing = false;
-});
-
-document.querySelectorAll(".swatch").forEach((button) => {
-  button.addEventListener("click", () => {
-    activeColor = button.dataset.color;
-    document.querySelectorAll(".swatch").forEach((item) => item.classList.toggle("active", item === button));
-  });
-});
-
-clearButton.addEventListener("click", () => {
-  for (const row of bitmap) row.fill("W");
-  redrawEditor();
-});
-
-fillButton.addEventListener("click", () => {
-  const code = activeColor === "black" ? "B" : activeColor === "red" ? "R" : "W";
-  for (const row of bitmap) row.fill(code);
-  redrawEditor();
-});
-
-zoomSize.addEventListener("input", () => {
-  const zoom = Number(zoomSize.value);
-  editorCanvas.style.width = `${296 * zoom}px`;
-  editorCanvas.style.height = `${128 * zoom}px`;
-});
-
 setConnection("connecting");
-redrawEditor();
 loadSnapshot().catch((error) => {
   setConnection("offline");
-  apiResult.textContent = String(error);
+  console.error(error);
 });
 connectEvents();

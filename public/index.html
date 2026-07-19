@@ -13,7 +13,7 @@
         <h1>E-paper Emulator</h1>
       </div>
       <div class="status">
-        <button id="designerToggle" class="toggleButton" type="button" aria-expanded="false">Designer</button>
+        <a class="docsLink" href="/api/docs">API Docs</a>
         <span id="connectionDot" class="dot"></span>
         <span id="connectionText">Connecting</span>
       </div>
@@ -21,46 +21,6 @@
 
     <main class="layout">
       <section class="grid" id="screenGrid" aria-label="E-paper display grid"></section>
-
-      <aside id="designerPanel" class="panel hidden">
-        <h2>Pixel Designer</h2>
-        <label>
-          API key
-          <input id="apiKey" type="password" autocomplete="off" placeholder="API_KEY" />
-        </label>
-        <label>
-          E-paper ID
-          <select id="screenId"></select>
-        </label>
-        <label>
-          Design title
-          <input id="title" type="text" value="Pixel Design" maxlength="48" />
-        </label>
-        <div class="editor">
-          <canvas id="pixelCanvas" width="296" height="128" aria-label="296 by 128 pixel editor"></canvas>
-        </div>
-        <div class="toolRow" role="group" aria-label="Drawing color">
-          <button class="swatch active" data-color="black" type="button" aria-label="Black"></button>
-          <button class="swatch red" data-color="red" type="button" aria-label="Red"></button>
-          <button class="swatch white" data-color="white" type="button" aria-label="White eraser"></button>
-        </div>
-        <div class="row">
-          <label>
-            Brush
-            <input id="brushSize" type="range" min="1" max="12" value="2" />
-          </label>
-          <label>
-            Zoom
-            <input id="zoomSize" type="range" min="2" max="5" value="3" />
-          </label>
-        </div>
-        <div class="buttonRow">
-          <button id="clearButton" class="secondary" type="button">Clear</button>
-          <button id="fillButton" class="secondary" type="button">Fill</button>
-        </div>
-        <button id="sendButton" type="button">Post Update</button>
-        <pre id="apiResult"></pre>
-      </aside>
     </main>
 
     <script src="/epaper-codec.js"></script>

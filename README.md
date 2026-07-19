@@ -2,6 +2,8 @@
 
 Web application and API emulator for 12 e-paper displays. Each display has a fixed 296x128 pixel canvas and supports white, black, and red.
 
+The web UI is a realtime viewer for the 12 screens. Pixel updates are sent through the API.
+
 ## Run Locally
 
 ```bash
@@ -12,6 +14,8 @@ npm start
 
 Open `http://localhost:3000`.
 
+API documentation is available at `http://localhost:3000/api/docs`.
+
 ## Docker
 
 ```bash
@@ -20,6 +24,8 @@ docker compose up -d --build
 ```
 
 ## Secure Update API
+
+Open `/api/docs` in the running app for the endpoint reference.
 
 Use either `Authorization: Bearer <API_KEY>` or `x-api-key: <API_KEY>`.
 
@@ -73,7 +79,7 @@ curl -X POST http://SERVER_IP:3000/api/update \
   }'
 ```
 
-The web designer uses this compact format automatically. The server still accepts the older debug formats, `bitmap` rows and `pixels`, for manual testing.
+The demo script uses this compact format automatically. The server still accepts the older debug formats, `bitmap` rows and `pixels`, for manual testing.
 
 Send 12 demo screens with different icon-style pixel art:
 

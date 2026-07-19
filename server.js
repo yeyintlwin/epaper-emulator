@@ -170,8 +170,83 @@ function sendEvent(screen) {
   for (const client of clients) client.write(event);
 }
 
+function apiDocsHtml() {
+  return `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>E-paper Emulator API Docs</title>
+    <style>
+      :root { color-scheme: light; --ink: #151515; --muted: #65717c; --paper: #fbfbf7; --line: #d8ddd2; --red: #d62828; --green: #2f6f4e; --bg: #edf0e8; }
+      * { box-sizing: border-box; }
+      body { margin: 0; background: var(--bg); color: var(--ink); font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; line-height: 1.5; }
+      main { width: min(960px, calc(100% - 32px)); margin: 0 auto; padding: 32px 0 56px; }
+      a { color: var(--green); font-weight: 750; }
+      h1 { margin: 0 0 8px; font-size: clamp(30px, 5vw, 48px); letter-spacing: 0; }
+      h2 { margin: 28px 0 10px; font-size: 22px; letter-spacing: 0; }
+      p { color: var(--muted); }
+      code, pre { border: 1px solid var(--line); border-radius: 6px; background: var(--paper); }
+      code { padding: 2px 5px; }
+      pre { overflow: auto; padding: 14px; }
+      table { width: 100%; border-collapse: collapse; background: var(--paper); }
+      th, td { border: 1px solid var(--line); padding: 10px; text-align: left; vertical-align: top; }
+      th { color: var(--green); }
+    </style>
+  </head>
+  <body>
+    <main>
+      <a href="/">Back to emulator</a>
+      <h1>E-paper Emulator API</h1>
+      <p>Controls 12 e-paper screens. Each screen is 296x128 pixels and supports white, black, and red.</p>
+
+      <h2>Authentication</h2>
+      <p>Write endpoints require either <code>Authorization: Bearer &lt;API_KEY&gt;</code> or <code>x-api-key: &lt;API_KEY&gt;</code>.</p>
+
+      <h2>Endpoints</h2>
+      <p>Most device updates use <code>POST /api/epapers/:id</code>.</p>
+      <table>
+        <thead><tr><th>Method</th><th>Path</th><th>Purpose</th></tr></thead>
+        <tbody>
+          <tr><td>GET</td><td><code>/health</code></td><td>Health check.</td></tr>
+          <tr><td>GET</td><td><code>/api/epapers</code></td><td>List all 12 screens.</td></tr>
+          <tr><td>GET</td><td><code>/api/epapers/:id</code></td><td>Read one screen by id, 1 through 12.</td></tr>
+          <tr><td>POST</td><td><code>/api/epapers/:id</code></td><td>Update one screen by path id.</td></tr>
+          <tr><td>POST</td><td><code>/api/update</code></td><td>Update one screen with <code>{ "id": 1, "data": ... }</code>.</td></tr>
+          <tr><td>POST</td><td><code>/api/reset</code></td><td>Reset all screens.</td></tr>
+          <tr><td>GET</td><td><code>/api/events</code></td><td>Server-sent events stream for realtime browser updates.</td></tr>
+        </tbody>
+      </table>
+
+      <h2>Compact Pixel Format</h2>
+      <p>Use <code>epd-2bit-v1</code>. It packs four pixels per byte: <code>00</code> white, <code>01</code> black, <code>10</code> red. A full frame is 9,472 bytes before base64.</p>
+      <pre><code>{
+  "format": "epd-2bit-v1",
+  "width": 296,
+  "height": 128,
+  "data": "base64-packed-bytes"
+}</code></pre>
+
+      <h2>Update Example</h2>
+      <pre><code>curl -X POST https://epaper-hub.yeyintlwin.com/api/epapers/1 \\
+  -H "Authorization: Bearer &lt;API_KEY&gt;" \\
+  -H "Content-Type: application/json" \\
+  -d '{"format":"epd-2bit-v1","width":296,"height":128,"data":"base64-packed-bytes"}'</code></pre>
+
+      <h2>Demo</h2>
+      <pre><code>EPAPER_URL=https://epaper-hub.yeyintlwin.com API_KEY=your-key npm run demo</code></pre>
+    </main>
+  </body>
+</html>`;
+}
+
 app.get("/health", (_req, res) => {
   res.json({ ok: true, screens: DISPLAY_COUNT, updatedAt: now() });
+});
+
+app.get("/api/docs", (_req, res) => {
+  res.set("Cache-Control", "no-store");
+  res.type("html").send(apiDocsHtml());
 });
 
 app.get("/api/epapers", optionalApiKey, (_req, res) => {
