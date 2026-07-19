@@ -14,11 +14,9 @@ jobs:
         with:
           node-version: 20
 
-      - run: npm ci
-        working-directory: apps/epaper-hub
+      - run: npm --prefix apps/epaper-hub ci
 
-      - run: npm test
-        working-directory: apps/epaper-hub
+      - run: npm --prefix apps/epaper-hub test
 
       - name: Build image
         run: |

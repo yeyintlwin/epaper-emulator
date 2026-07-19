@@ -34,7 +34,9 @@ test("GitHub Actions deploys from GitHub-hosted runner over SSH", () => {
 
   assert.match(workflow, /ubuntu-latest/);
   assert.match(workflow, /LIGHTSAIL_SSH_KEY/);
-  assert.match(workflow, /working-directory: apps\/epaper-hub/);
+  assert.match(workflow, /npm --prefix apps\/epaper-hub ci/);
+  assert.match(workflow, /npm --prefix apps\/epaper-hub test/);
+  assert.doesNotMatch(workflow, /working-directory: apps\/epaper-hub/);
   assert.match(workflow, /docker build -t epaper-emulator:\$\{\{ github\.sha \}\} apps\/epaper-hub/);
   assert.match(workflow, /docker save epaper-emulator:\$\{\{ github\.sha \}\}/);
   assert.match(workflow, /docker load -i \/tmp\/epaper-emulator-image\.tgz/);
