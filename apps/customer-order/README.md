@@ -7,6 +7,7 @@ For now this app is English-only. Internationalization will be added after the m
 ## Run Locally
 
 ```bash
+npm ci
 cp .env.example .env
 npm start
 ```
@@ -18,10 +19,11 @@ Open `http://localhost:3100/?table=1`.
 ```bash
 PORT=3100
 EPAPER_HUB_URL=https://epaper-hub.yeyintlwin.com
+ORDER_BASE_URL=https://order.yeyintlwin.com
 EPAPER_API_KEY=replace-with-epaper-hub-api-key
 ```
 
-`EPAPER_API_KEY` stays on the server. The browser never receives it. If you already have the e-paper hub secret as `API_KEY`, the customer app can reuse that instead.
+`EPAPER_API_KEY` stays on the server. The browser never receives it. If you already have the e-paper hub secret as `API_KEY`, the customer app can reuse that instead. `ORDER_BASE_URL` is the public page encoded into each table QR code.
 
 ## Current Flow
 

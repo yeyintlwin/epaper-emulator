@@ -2,5 +2,6 @@
 apps/*/.env
 node_modules/
 apps/*/node_modules/
+.worktrees/
 .DS_Store
 npm-debug.log

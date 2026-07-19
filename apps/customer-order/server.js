@@ -70,9 +70,11 @@ function sendStatic(req, res) {
 
 function createServer(options = {}) {
   const store = options.store || createOrderStore({ now: options.now });
+  const pendingEpaperTables = new Set();
   const epaperClient = options.epaperClient || createEpaperClient({
     hubUrl: process.env.EPAPER_HUB_URL,
-    apiKey: process.env.EPAPER_API_KEY || process.env.API_KEY
+    apiKey: process.env.EPAPER_API_KEY || process.env.API_KEY,
+    orderBaseUrl: process.env.ORDER_BASE_URL
   });
 
   async function handler(req, res) {
@@ -101,10 +103,18 @@ function createServer(options = {}) {
           tableNumber: body.table_number,
           items: body.items
         });
-        if (result.isFirstOrderForSession) {
-          await epaperClient.updateTableInUse(result.session.tableNumber, result.session);
+        const tableNumber = result.session.tableNumber;
+        let epaperUpdate = { ok: true };
+        if (result.isFirstOrderForSession || pendingEpaperTables.has(tableNumber)) {
+          try {
+            epaperUpdate = await epaperClient.updateTableInUse(tableNumber, result.session);
+            pendingEpaperTables.delete(tableNumber);
+          } catch (error) {
+            pendingEpaperTables.add(tableNumber);
+            epaperUpdate = { ok: false, pending: true, error: error.message };
+          }
         }
-        return sendJson(res, 201, result);
+        return sendJson(res, 201, { ...result, epaperUpdate });
       }
 
       if (req.method === "POST" && url.pathname === "/api/staff-calls") {

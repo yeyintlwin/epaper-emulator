@@ -1,0 +1,15 @@
+{
+  "name": "@restaurant/epaper-hub-sdk",
+  "version": "1.0.0",
+  "description": "Server-side SDK and table templates for the e-paper hub.",
+  "main": "index.js",
+  "scripts": {
+    "test": "node --test"
+  },
+  "dependencies": {
+    "qrcode-generator": "^1.4.4"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

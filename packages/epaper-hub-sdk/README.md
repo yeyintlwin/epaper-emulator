@@ -1,0 +1,43 @@
+# E-paper Hub SDK
+
+Server-side JavaScript SDK for the restaurant's 296x128 white/black/red table displays. Its built-in table template renders the table number, status, and a QR code for the exact ordering URL, then sends the compact `epd-2bit-v1` payload to the hub.
+
+## Install
+
+From this monorepo:
+
+```bash
+npm --prefix packages/epaper-hub-sdk ci
+```
+
+## Use
+
+```js
+const { createEpaperHubSdk } = require("@restaurant/epaper-hub-sdk");
+
+const epaper = createEpaperHubSdk({
+  baseUrl: process.env.EPAPER_HUB_URL,
+  apiKey: process.env.EPAPER_API_KEY
+});
+
+await epaper.updateTableDisplay({
+  epaperId: 7,
+  tableNumber: 7,
+  status: "Table is in use",
+  url: "https://order.yeyintlwin.com/?table=7"
+});
+```
+
+`epaperId` must be from 1 to 12. `tableNumber`, `status`, and `url` are rendered into the built-in template. The URL is encoded as a QR code without modification and is rejected if its QR matrix cannot fit the screen safely. The current status font supports uppercase ASCII letters, digits, spaces, and hyphens across two 15-character lines.
+
+To render without sending:
+
+```js
+const payload = epaper.renderTableDisplay({
+  tableNumber: 7,
+  status: "Welcome",
+  url: "https://order.yeyintlwin.com/?table=7"
+});
+```
+
+The returned object can be posted directly to `/api/epapers/:id`. Keep the API key and SDK calls in server code only.

@@ -29,6 +29,30 @@ test("placing first order updates e-paper once and keeps slip for later orders",
   assert.deepEqual(epaperUpdates, [{ tableNumber: 4, slipNumber: first.body.session.slipNumber }]);
 });
 
+test("keeps a stored order successful and retries a failed e-paper update", async () => {
+  let attempts = 0;
+  const server = createServer({
+    epaperClient: {
+      updateTableInUse: async () => {
+        attempts += 1;
+        if (attempts === 1) throw new Error("hub unavailable");
+        return { ok: true };
+      }
+    }
+  });
+  const body = {
+    table_number: 4,
+    items: [{ id: "crispy-gyoza", quantity: 1 }]
+  };
+
+  const first = await server.inject("POST", "/api/orders", body);
+  const second = await server.inject("POST", "/api/orders", body);
+
+  assert.equal(first.status, 201);
+  assert.equal(second.status, 201);
+  assert.equal(attempts, 2);
+});
+
 test("frontend config endpoint does not expose e-paper secrets", async () => {
   const server = createServer({
     epaperClient: { updateTableInUse: async () => ({ ok: true }) }

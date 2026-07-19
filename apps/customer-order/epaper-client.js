@@ -1,30 +1,23 @@
-function createEpaperClient({ hubUrl, apiKey, fetchImpl = fetch } = {}) {
+const { createEpaperHubSdk } = require("@restaurant/epaper-hub-sdk");
+
+function createEpaperClient({ hubUrl, apiKey, orderBaseUrl, fetchImpl = fetch } = {}) {
   const normalizedHubUrl = String(hubUrl || "").replace(/\/$/, "");
   const token = String(apiKey || "");
+  const sdk = normalizedHubUrl && token
+    ? createEpaperHubSdk({ baseUrl: normalizedHubUrl, apiKey: token, fetchImpl })
+    : null;
 
   async function updateTableInUse(tableNumber, session) {
-    if (!normalizedHubUrl || !token) return { skipped: true };
+    if (!sdk) return { skipped: true };
+    const orderingUrl = new URL(orderBaseUrl || "https://order.yeyintlwin.com");
+    orderingUrl.searchParams.set("table", tableNumber);
 
-    const response = await fetchImpl(`${normalizedHubUrl}/api/epapers/${tableNumber}`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        title: `TABLE ${tableNumber}`,
-        lines: [`TABLE ${tableNumber}`, "Table is in use", session.slipNumber],
-        text: `Table is in use\n${session.slipNumber}`,
-        background: "white",
-        color: "black",
-        accent: "red",
-        align: "center",
-        size: "medium"
-      })
+    return sdk.updateTableDisplay({
+      epaperId: tableNumber,
+      tableNumber,
+      status: "Table is in use",
+      url: orderingUrl.toString()
     });
-
-    if (!response.ok) throw new Error(`E-paper hub update failed with ${response.status}`);
-    return response.json ? response.json() : { ok: true };
   }
 
   return { updateTableInUse };

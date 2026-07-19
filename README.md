@@ -10,6 +10,7 @@ Restaurant ordering platform with table e-paper monitors, customer ordering, kit
 - `apps/cashier-counter` - checkout, bill review, checkout barcode scanning, and final settlement.
 - `apps/admin-management` - menu management, pricing, daily sales, and transaction history.
 - `apps/captive-portal` - guest Wi-Fi onboarding and survey flow.
+- `packages/epaper-hub-sdk` - server-side SDK that renders table/status/QR templates and securely updates e-paper screens.
 - `packages/shared` - shared schemas and helpers used across apps.
 - `infra` - deployment and infrastructure notes.
 
@@ -32,11 +33,32 @@ Run the customer ordering app locally:
 
 ```bash
 cd apps/customer-order
+npm ci
 cp .env.example .env
 npm start
 ```
 
 Open `http://localhost:3100/?table=1`.
+
+Applications can update a table display through the SDK:
+
+```js
+const { createEpaperHubSdk } = require("./packages/epaper-hub-sdk");
+
+const epaper = createEpaperHubSdk({
+  baseUrl: "https://epaper-hub.yeyintlwin.com",
+  apiKey: process.env.EPAPER_API_KEY
+});
+
+await epaper.updateTableDisplay({
+  epaperId: 3,
+  tableNumber: 3,
+  status: "Welcome",
+  url: "https://order.yeyintlwin.com/?table=3"
+});
+```
+
+Keep this call on the server so `EPAPER_API_KEY` is never exposed to customers.
 
 Run tests from the repository root:
 

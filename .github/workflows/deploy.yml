@@ -16,7 +16,13 @@ jobs:
 
       - run: npm --prefix apps/epaper-hub ci
 
+      - run: npm --prefix packages/epaper-hub-sdk ci
+
+      - run: npm --prefix packages/epaper-hub-sdk test
+
       - run: npm --prefix apps/epaper-hub test
+
+      - run: npm --prefix apps/customer-order ci
 
       - run: npm --prefix apps/customer-order test
 
