@@ -33,7 +33,7 @@ curl -X POST "http://localhost:3100/api/table-displays/7/welcome" \
   -H "Authorization: Bearer $TABLE_DISPLAY_API_KEY"
 ```
 
-This securely uses the server-side e-paper SDK to display table 7, `Welcome`, and a QR for `${ORDER_BASE_URL}?table=7`. Run it when preparing or clearing a table; server startup does not reset displays automatically.
+This securely uses the server-side e-paper SDK to display table 7, `Welcome`, and a QR for `${ORDER_BASE_URL}?table=7`. Run it when preparing or clearing a table; server startup does not reset displays automatically. Active tables return `409` and must be closed through checkout before they can be initialized to `Welcome` again.
 
 ## Current Flow
 

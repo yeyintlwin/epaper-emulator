@@ -81,6 +81,14 @@ test("server can reuse epaper hub API_KEY when EPAPER_API_KEY is not set", () =>
   assert.match(source, /process\.env\.EPAPER_API_KEY \|\| process\.env\.API_KEY/);
 });
 
+test("provisioning compares SHA-256 token digests with timingSafeEqual", () => {
+  const source = require("node:fs").readFileSync(require.resolve("../server"), "utf8");
+
+  assert.match(source, /const supplied = crypto\.createHash\("sha256"\)\.update\(.+\)\.digest\(\)/);
+  assert.match(source, /const configured = crypto\.createHash\("sha256"\)\.update\(.+\)\.digest\(\)/);
+  assert.match(source, /crypto\.timingSafeEqual\(supplied, configured\)/);
+});
+
 test("authorized provisioning displays the Welcome ordering QR", async () => {
   const updates = [];
   const server = createServer({
@@ -126,7 +134,7 @@ test("provisioning rejects missing or incorrect authorization", async () => {
   assert.equal(updates, 0);
 });
 
-test("provisioning rejects invalid table number segments", async () => {
+test("provisioning rejects noncanonical table number segments", async () => {
   let updates = 0;
   const server = createServer({
     tableDisplayApiKey: "display-secret",
@@ -136,7 +144,7 @@ test("provisioning rejects invalid table number segments", async () => {
     })
   });
 
-  for (const tableNumber of ["13", "-1", "1.5", "not-a-number"]) {
+  for (const tableNumber of ["-1", "1.5", "not-a-number", "1e0", "0x1", "01", "0", "13"]) {
     const response = await server.inject(
       "POST",
       `/api/table-displays/${tableNumber}/welcome`,
@@ -147,6 +155,40 @@ test("provisioning rejects invalid table number segments", async () => {
     assert.equal(response.status, 400);
   }
   assert.equal(updates, 0);
+});
+
+test("provisioning rejects active tables without updating the display or session", async () => {
+  let welcomeUpdates = 0;
+  const server = createServer({
+    tableDisplayApiKey: "display-secret",
+    epaperClient: {
+      updateTableInUse: async () => ({ ok: true }),
+      updateTableWelcome: async () => {
+        welcomeUpdates += 1;
+        return { ok: true };
+      }
+    }
+  });
+
+  const order = await server.inject("POST", "/api/orders", {
+    table_number: 7,
+    items: [{ id: "crispy-gyoza", quantity: 1 }]
+  });
+  const before = await server.inject("GET", "/api/session?table_number=7");
+  const response = await server.inject(
+    "POST",
+    "/api/table-displays/7/welcome",
+    undefined,
+    { authorization: "Bearer display-secret" }
+  );
+  const after = await server.inject("GET", "/api/session?table_number=7");
+
+  assert.equal(order.status, 201);
+  assert.equal(before.body.session.status, "Table is in use");
+  assert.equal(response.status, 409);
+  assert.deepEqual(response.body, { error: "Table is in use" });
+  assert.equal(welcomeUpdates, 0);
+  assert.deepEqual(after.body.session, before.body.session);
 });
 
 test("provisioning reports missing server display configuration", async () => {
@@ -179,10 +221,6 @@ test("provisioning maps SDK failures to 502 without changing the session", async
     })
   });
 
-  const order = await server.inject("POST", "/api/orders", {
-    table_number: 7,
-    items: [{ id: "crispy-gyoza", quantity: 1 }]
-  });
   const before = await server.inject("GET", "/api/session?table_number=7");
   const response = await server.inject(
     "POST",
@@ -192,9 +230,8 @@ test("provisioning maps SDK failures to 502 without changing the session", async
   );
   const after = await server.inject("GET", "/api/session?table_number=7");
 
-  assert.equal(order.status, 201);
-  assert.equal(before.body.session.status, "Table is in use");
-  assert.equal(before.body.session.orders.length, 1);
+  assert.equal(before.body.session.status, "Welcome");
+  assert.equal(before.body.session.orders.length, 0);
   assert.equal(response.status, 502);
   assert.deepEqual(response.body, { error: "E-paper display update failed" });
   assert.deepEqual(after.body.session, before.body.session);

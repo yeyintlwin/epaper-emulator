@@ -49,9 +49,9 @@ function sendJson(res, status, payload) {
 function bearerMatches(header, expected) {
   const prefix = "Bearer ";
   if (!String(header || "").startsWith(prefix) || !expected) return false;
-  const supplied = Buffer.from(String(header).slice(prefix.length));
-  const configured = Buffer.from(String(expected));
-  return supplied.length === configured.length && crypto.timingSafeEqual(supplied, configured);
+  const supplied = crypto.createHash("sha256").update(String(header).slice(prefix.length)).digest();
+  const configured = crypto.createHash("sha256").update(String(expected)).digest();
+  return crypto.timingSafeEqual(supplied, configured);
 }
 
 function contentType(filePath) {
@@ -116,9 +116,12 @@ function createServer(options = {}) {
           return sendJson(res, 401, { error: "Unauthorized" });
         }
 
-        const tableNumber = Number(welcomeRoute[1]);
-        if (!Number.isInteger(tableNumber) || tableNumber < 1 || tableNumber > MAX_TABLE_NUMBER) {
+        if (!/^(?:[1-9]|1[0-2])$/.test(welcomeRoute[1])) {
           return sendJson(res, 400, { error: `table number must be between 1 and ${MAX_TABLE_NUMBER}` });
+        }
+        const tableNumber = Number(welcomeRoute[1]);
+        if (store.getSession(tableNumber).status === "Table is in use") {
+          return sendJson(res, 409, { error: "Table is in use" });
         }
 
         try {

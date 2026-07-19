@@ -58,7 +58,7 @@ await epaper.updateTableDisplay({
 });
 ```
 
-Keep this call on the server so `EPAPER_API_KEY` is never exposed to customers.
+Keep this call on the server so `EPAPER_API_KEY` is never exposed to customers. `TABLE_DISPLAY_API_KEY` is a separate server-only credential for the customer-order provisioning endpoint; it is not the e-paper hub `EPAPER_API_KEY` or its `API_KEY` fallback.
 
 Initialize a table display through the customer-order service:
 
@@ -67,7 +67,7 @@ curl -X POST "https://order.yeyintlwin.com/api/table-displays/7/welcome" \
   -H "Authorization: Bearer $TABLE_DISPLAY_API_KEY"
 ```
 
-This securely uses the server-side e-paper SDK to display table 7, `Welcome`, and a QR for `https://order.yeyintlwin.com/?table=7`. Run it when preparing or clearing a table; server startup does not reset displays automatically.
+This securely uses the server-side e-paper SDK to display table 7, `Welcome`, and a QR for `https://order.yeyintlwin.com/?table=7`. Run it when preparing or clearing a table; server startup does not reset displays automatically. Active tables return `409` and must be closed through checkout before they can be initialized to `Welcome` again.
 
 Run tests from the repository root:
 
