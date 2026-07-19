@@ -1,12 +1,36 @@
 # Customer Order App
 
-Customer-facing ordering interface opened from the e-paper table QR code.
+Mobile-first customer ordering interface opened from the e-paper table QR code.
 
-Planned flow:
+For now this app is English-only. Internationalization will be added after the main workflows are complete.
 
-1. Read `table_number` from the QR URL.
-2. Ask the customer to choose Thai, English, Chinese, Japanese, or Burmese.
-3. Show menu categories, recommendations, search, service items, desserts, and drinks.
-4. Add items to cart.
-5. Place order and update the table e-paper status to `Table is in use`.
-6. Keep using the same table session and slip number for later orders until checkout.
+## Run Locally
+
+```bash
+cp .env.example .env
+npm start
+```
+
+Open `http://localhost:3100/?table=1`.
+
+## Environment
+
+```bash
+PORT=3100
+EPAPER_HUB_URL=https://epaper-hub.yeyintlwin.com
+EPAPER_API_KEY=replace-with-epaper-hub-api-key
+```
+
+`EPAPER_API_KEY` stays on the server. The browser never receives it.
+
+## Current Flow
+
+1. Read `table` or `table_number` from the QR URL.
+2. Show menu categories, recommendations, search, service items, desserts, and drinks.
+3. Add items to cart.
+4. Place order.
+5. First order creates a table session and slip number.
+6. Later orders from the same table keep the same slip number.
+7. First order securely updates the e-paper hub status to `Table is in use`.
+8. Customer can call staff.
+9. Checkout preview shows subtotal, service fee, tax, total, bill split, and payment QR placeholder.

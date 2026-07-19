@@ -18,6 +18,8 @@ jobs:
 
       - run: npm --prefix apps/epaper-hub test
 
+      - run: npm --prefix apps/customer-order test
+
       - name: Build image
         run: |
           set -euo pipefail

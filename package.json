@@ -5,7 +5,8 @@
     "apps/*"
   ],
   "scripts": {
-    "test": "npm --prefix apps/epaper-hub test",
+    "test": "npm --prefix apps/epaper-hub test && npm --prefix apps/customer-order test",
+    "start:customer": "npm --prefix apps/customer-order start",
     "demo:epaper": "npm --prefix apps/epaper-hub run demo"
   }
 }

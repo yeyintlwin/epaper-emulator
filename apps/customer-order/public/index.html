@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Restaurant Order</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main class="appShell">
+      <header class="topBar">
+        <div>
+          <p class="eyebrow">Table</p>
+          <h1 id="tableTitle">Table --</h1>
+        </div>
+        <button class="iconButton" id="callStaffButton" type="button" aria-label="Call staff">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a6 6 0 0 0-6 6v3.5L4 16v1h16v-1l-2-3.5V9a6 6 0 0 0-6-6Zm0 18a3 3 0 0 0 2.8-2H9.2A3 3 0 0 0 12 21Z"/></svg>
+        </button>
+      </header>
+
+      <section class="statusPanel">
+        <div>
+          <span class="statusDot"></span>
+          <span id="sessionStatus">Welcome</span>
+        </div>
+        <strong id="slipNumber">No slip yet</strong>
+      </section>
+
+      <label class="searchBox">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m21 20-5.6-5.6a7 7 0 1 0-1.4 1.4L20 21l1-1ZM5 10a5 5 0 1 1 10 0A5 5 0 0 1 5 10Z"/></svg>
+        <input id="searchInput" type="search" placeholder="Search menu" autocomplete="off" />
+      </label>
+
+      <nav class="tabs" id="menuTabs" aria-label="Menu categories"></nav>
+      <section class="menuList" id="menuList" aria-live="polite"></section>
+
+      <section class="checkoutPanel" id="checkoutPanel">
+        <h2>Checkout</h2>
+        <div class="totals" id="totals"></div>
+        <label class="splitControl" id="billSplit">
+          Split bill
+          <input id="splitCount" type="number" min="1" max="12" value="1" />
+        </label>
+        <div class="splitResult" id="splitResult"></div>
+        <div class="paymentQr" id="paymentQr">PAYMENT QR</div>
+      </section>
+    </main>
+
+    <aside class="cartSheet" id="cartSheet" aria-label="Cart">
+      <div class="cartHeader">
+        <div>
+          <p class="eyebrow">Cart</p>
+          <strong id="cartCount">0 items</strong>
+        </div>
+        <strong id="cartTotal">JPY 0</strong>
+      </div>
+      <div class="cartItems" id="cartItems"></div>
+      <button class="primaryButton" id="placeOrderButton" type="button">Place Order Now</button>
+    </aside>
+
+    <div class="toast" id="toast" role="status"></div>
+    <script src="/app.js"></script>
+  </body>
+</html>

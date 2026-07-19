@@ -15,7 +15,9 @@ Restaurant ordering platform with table e-paper monitors, customer ordering, kit
 
 ## Current Status
 
-The first working service is the e-paper hub at `apps/epaper-hub`. It is deployed at `https://epaper-hub.yeyintlwin.com` and still uses the same GitHub Actions CI/CD pipeline.
+The first deployed service is the e-paper hub at `apps/epaper-hub`. It is deployed at `https://epaper-hub.yeyintlwin.com` and still uses the same GitHub Actions CI/CD pipeline.
+
+The customer ordering app has started at `apps/customer-order`. It runs locally now and is intended for `https://order.yeyintlwin.com`.
 
 Run the current app locally:
 
@@ -25,6 +27,16 @@ cp .env.example .env
 npm install
 npm start
 ```
+
+Run the customer ordering app locally:
+
+```bash
+cd apps/customer-order
+cp .env.example .env
+npm start
+```
+
+Open `http://localhost:3100/?table=1`.
 
 Run tests from the repository root:
 
