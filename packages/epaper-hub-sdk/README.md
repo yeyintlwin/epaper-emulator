@@ -41,3 +41,7 @@ const payload = epaper.renderTableDisplay({
 ```
 
 The returned object can be posted directly to `/api/epapers/:id`. Keep the API key and SDK calls in server code only.
+
+## Docker Runtime
+
+The customer-order container uses this SDK through the private Compose address `http://epaper-hub:3000`, not the public e-paper hub URL. Its startup bootstrap uses the same server-side client to reset tables 1 through 12 to `Welcome` before customer traffic is accepted. Keep `EPAPER_API_KEY` (or the hub's `API_KEY` fallback) only in the external runtime environment file.

@@ -28,6 +28,35 @@ test("Docker Compose exposes app only on localhost for Nginx proxy", () => {
   assert.doesNotMatch(compose, /caddy:/);
 });
 
+test("Docker Compose starts customer ordering after a healthy e-paper hub", () => {
+  const compose = fs.readFileSync(path.join(appRoot, "docker-compose.yml"), "utf8");
+
+  assert.match(compose, /customer-order:/);
+  assert.match(compose, /image: \$\{CUSTOMER_ORDER_IMAGE:-customer-order\}/);
+  assert.match(compose, /127\.0\.0\.1:3100:3100/);
+  assert.match(compose, /EPAPER_HUB_URL: http:\/\/epaper-hub:3000/);
+  assert.match(compose, /ORDER_BASE_URL: https:\/\/order\.yeyintlwin\.com/);
+  assert.match(compose, /condition: service_healthy/);
+  assert.match(compose, /restart: unless-stopped/);
+  assert.match(compose, /healthcheck:/);
+  assert.match(compose, /wget.*http:\/\/localhost:3000\/health/);
+});
+
+test("Customer order Docker image includes its local SDK runtime dependency", () => {
+  const dockerfile = fs.readFileSync(
+    path.join(repoRoot, "apps", "customer-order", "Dockerfile"),
+    "utf8",
+  );
+
+  assert.match(dockerfile, /FROM node:20-alpine/);
+  assert.match(dockerfile, /COPY packages\/epaper-hub-sdk \.\/packages\/epaper-hub-sdk/);
+  assert.match(dockerfile, /COPY apps\/customer-order \.\/apps\/customer-order/);
+  assert.match(dockerfile, /npm --prefix packages\/epaper-hub-sdk install --omit=dev/);
+  assert.match(dockerfile, /npm --prefix apps\/customer-order install --omit=dev --workspaces=false/);
+  assert.match(dockerfile, /EXPOSE 3100/);
+  assert.match(dockerfile, /CMD \["node", "apps\/customer-order\/server\.js"\]/);
+});
+
 test("GitHub Actions deploys from GitHub-hosted runner over SSH", () => {
   const workflow = fs.readFileSync(
     path.join(repoRoot, ".github", "workflows", "deploy.yml"),

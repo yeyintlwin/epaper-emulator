@@ -67,7 +67,7 @@ curl -X POST "https://order.yeyintlwin.com/api/table-displays/7/welcome" \
   -H "Authorization: Bearer $TABLE_DISPLAY_API_KEY"
 ```
 
-This securely uses the server-side e-paper SDK to display table 7, `Welcome`, and a QR for `https://order.yeyintlwin.com/?table=7`. Use it only to prepare an inactive table; server startup does not reset displays automatically. Active tables return `409` with `Table is in use` and are not reset by this endpoint. Session closure is outside this feature and will be owned by the future cashier checkout/session lifecycle.
+This securely uses the server-side e-paper SDK to display table 7, `Welcome`, and a QR for `https://order.yeyintlwin.com/?table=7`. On every customer-order startup, the service resets all 12 displays to their `Welcome` ordering screens before accepting traffic. Use this endpoint only to prepare an inactive table while the service is running. Active tables return `409` with `Table is in use` and are not reset by this endpoint. Session closure is outside this feature and will be owned by the future cashier checkout/session lifecycle.
 
 Run tests from the repository root:
 
@@ -100,3 +100,5 @@ The Lightsail server should keep only the runtime deployment files in `~/restaur
 - optional `config/`
 
 The environment file remains outside that folder at `~/restaurant-order-system.env`.
+
+Docker Compose runs `epaper-hub` and `customer-order` together. The hub and order ports bind only to `127.0.0.1`; Nginx owns public HTTPS. The order service waits for the hub health check, then connects to it privately at `http://epaper-hub:3000` while rendering public QR links for `https://order.yeyintlwin.com`.

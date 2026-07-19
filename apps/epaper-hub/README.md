@@ -20,12 +20,13 @@ API documentation is available at `http://localhost:3000/api/docs`.
 ## Docker
 
 ```bash
-cd apps/epaper-hub
-cp .env.example .env
-docker compose up -d --build
+cd ../..
+docker build -f apps/customer-order/Dockerfile -t customer-order .
+EPAPER_ENV_FILE=/path/to/restaurant-order-system.env \
+  docker compose -f apps/epaper-hub/docker-compose.yml up -d --build
 ```
 
-Latest e-paper screen state is persisted in the Docker named volume `epaper-data`, so browser refreshes and container restarts keep the last update.
+Compose starts the customer-order service after `/health` reports that the e-paper hub is ready. Customer ordering uses the private Docker URL `http://epaper-hub:3000`, publishes `127.0.0.1:3100`, and resets all 12 display screens before accepting traffic. Latest e-paper screen state is persisted in the Docker named volume `epaper-data`, so browser refreshes and container restarts keep the last update.
 
 ## Secure Update API
 
@@ -111,8 +112,8 @@ Older debug pixel payload:
 1. Install Docker and Docker Compose.
 2. Keep runtime config outside the deploy folder at `~/restaurant-order-system.env`.
 3. Keep only `~/restaurant-order-system/docker-compose.yml` on the server, plus `~/restaurant-order-system/config/` if needed later.
-4. GitHub Actions builds the Docker image, uploads it, and runs `docker compose up -d --no-build`.
+4. Build and upload both images before running `docker compose up -d --no-build`; the current GitHub Actions update for the customer-order image is the next deployment task.
 5. The latest screen state is stored inside the Docker named volume `epaper-data`, not in the project folder.
 6. Open ports `80` and `443` in the Lightsail firewall.
 
-Run the app on `127.0.0.1:3000` and proxy `epaper-hub.yeyintlwin.com` to it with Nginx.
+Run the hub on `127.0.0.1:3000` and proxy `epaper-hub.yeyintlwin.com` to it with Nginx. Run customer ordering on `127.0.0.1:3100` and proxy `order.yeyintlwin.com` to it with Nginx.

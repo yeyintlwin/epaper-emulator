@@ -12,6 +12,27 @@ services:
       SCREEN_STORE_FILE: /data/screens.json
     volumes:
       - epaper-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3000/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  customer-order:
+    image: ${CUSTOMER_ORDER_IMAGE:-customer-order}
+    container_name: customer-order
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3100:3100"
+    env_file:
+      - ${EPAPER_ENV_FILE:-.env}
+    environment:
+      PORT: 3100
+      EPAPER_HUB_URL: http://epaper-hub:3000
+      ORDER_BASE_URL: https://order.yeyintlwin.com
+    depends_on:
+      epaper-hub:
+        condition: service_healthy
 
 volumes:
   epaper-data:
