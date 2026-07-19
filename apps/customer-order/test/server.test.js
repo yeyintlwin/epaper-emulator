@@ -134,6 +134,27 @@ test("provisioning rejects missing or incorrect authorization", async () => {
   assert.equal(updates, 0);
 });
 
+test("provisioning rejects an incorrect bearer token with the configured token length", async () => {
+  let updates = 0;
+  const server = createServer({
+    tableDisplayApiKey: "display-secret",
+    epaperClient: displayClient(async () => {
+      updates += 1;
+      return { ok: true };
+    })
+  });
+
+  const response = await server.inject(
+    "POST",
+    "/api/table-displays/7/welcome",
+    undefined,
+    { authorization: "Bearer display-secrEt" }
+  );
+
+  assert.equal(response.status, 401);
+  assert.equal(updates, 0);
+});
+
 test("provisioning rejects noncanonical table number segments", async () => {
   let updates = 0;
   const server = createServer({
@@ -189,6 +210,55 @@ test("provisioning rejects active tables without updating the display or session
   assert.deepEqual(response.body, { error: "Table is in use" });
   assert.equal(welcomeUpdates, 0);
   assert.deepEqual(after.body.session, before.body.session);
+});
+
+test("a concurrent first order leaves the table display in use after Welcome provisioning", async () => {
+  let releaseWelcome;
+  const welcomeStarted = new Promise((resolve) => {
+    releaseWelcome = resolve;
+  });
+  let beginWelcome;
+  const welcomeBegun = new Promise((resolve) => {
+    beginWelcome = resolve;
+  });
+  const displayUpdates = [];
+  const server = createServer({
+    tableDisplayApiKey: "display-secret",
+    epaperClient: {
+      updateTableWelcome: async () => {
+        beginWelcome();
+        await welcomeStarted;
+        displayUpdates.push("Welcome");
+        return { ok: true };
+      },
+      updateTableInUse: async () => {
+        displayUpdates.push("Table is in use");
+        return { ok: true };
+      }
+    }
+  });
+
+  const welcome = server.inject(
+    "POST",
+    "/api/table-displays/7/welcome",
+    undefined,
+    { authorization: "Bearer display-secret" }
+  );
+  await welcomeBegun;
+  const order = server.inject("POST", "/api/orders", {
+    table_number: 7,
+    items: [{ id: "crispy-gyoza", quantity: 1 }]
+  });
+  await new Promise(setImmediate);
+  releaseWelcome();
+
+  const [welcomeResponse, orderResponse] = await Promise.all([welcome, order]);
+  const sessionResponse = await server.inject("GET", "/api/session?table_number=7");
+
+  assert.equal(welcomeResponse.status, 200);
+  assert.equal(orderResponse.status, 201);
+  assert.equal(sessionResponse.body.session.status, "Table is in use");
+  assert.deepEqual(displayUpdates, ["Welcome", "Table is in use"]);
 });
 
 test("provisioning reports missing server display configuration", async () => {

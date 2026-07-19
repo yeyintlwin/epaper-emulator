@@ -33,7 +33,7 @@ curl -X POST "http://localhost:3100/api/table-displays/7/welcome" \
   -H "Authorization: Bearer $TABLE_DISPLAY_API_KEY"
 ```
 
-This securely uses the server-side e-paper SDK to display table 7, `Welcome`, and a QR for `${ORDER_BASE_URL}?table=7`. Run it when preparing or clearing a table; server startup does not reset displays automatically. Active tables return `409` and must be closed through checkout before they can be initialized to `Welcome` again.
+This securely uses the server-side e-paper SDK to display table 7, `Welcome`, and a QR for `${ORDER_BASE_URL}?table=7`. Use it only to prepare an inactive table; server startup does not reset displays automatically. Active tables return `409` with `Table is in use` and are not reset by this endpoint. Session closure is outside this feature and will be owned by the future cashier checkout/session lifecycle.
 
 ## Current Flow
 
@@ -46,3 +46,4 @@ This securely uses the server-side e-paper SDK to display table 7, `Welcome`, an
 7. First order securely updates the e-paper hub status to `Table is in use`.
 8. Customer can call staff.
 9. Checkout preview shows subtotal, service fee, tax, total, bill split, and a checkout barcode.
+10. This app's in-memory order store does not yet close active sessions; that future cashier checkout/session lifecycle will own session closure.

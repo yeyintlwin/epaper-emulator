@@ -67,7 +67,7 @@ curl -X POST "https://order.yeyintlwin.com/api/table-displays/7/welcome" \
   -H "Authorization: Bearer $TABLE_DISPLAY_API_KEY"
 ```
 
-This securely uses the server-side e-paper SDK to display table 7, `Welcome`, and a QR for `https://order.yeyintlwin.com/?table=7`. Run it when preparing or clearing a table; server startup does not reset displays automatically. Active tables return `409` and must be closed through checkout before they can be initialized to `Welcome` again.
+This securely uses the server-side e-paper SDK to display table 7, `Welcome`, and a QR for `https://order.yeyintlwin.com/?table=7`. Use it only to prepare an inactive table; server startup does not reset displays automatically. Active tables return `409` with `Table is in use` and are not reset by this endpoint. Session closure is outside this feature and will be owned by the future cashier checkout/session lifecycle.
 
 Run tests from the repository root:
 
@@ -85,8 +85,8 @@ npm test
 6. When the first order is placed, the table status updates to `Table is in use`.
 7. The kitchen monitor receives the order with the table number.
 8. The kitchen printer prints a slip with table number, ordered items, slip number, and barcode.
-9. The first order creates the slip number. All later orders from the same table session keep that same slip number until checkout.
-10. The cashier completes checkout and closes the table session.
+9. The first order creates the slip number. All later orders from the same table session keep that same slip number while the session remains active.
+10. Session closure will be owned by a future cashier checkout/session lifecycle; it is not available in the current in-memory order store.
 
 ## Management Requirements
 

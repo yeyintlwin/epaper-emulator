@@ -80,12 +80,22 @@ function sendStatic(req, res) {
 function createServer(options = {}) {
   const store = options.store || createOrderStore({ now: options.now });
   const pendingEpaperTables = new Set();
+  const tableDisplayUpdates = new Map();
   const tableDisplayApiKey = options.tableDisplayApiKey ?? process.env.TABLE_DISPLAY_API_KEY;
   const epaperClient = options.epaperClient || createEpaperClient({
     hubUrl: process.env.EPAPER_HUB_URL,
     apiKey: process.env.EPAPER_API_KEY || process.env.API_KEY,
     orderBaseUrl: process.env.ORDER_BASE_URL
   });
+
+  function runTableDisplayUpdate(tableNumber, update) {
+    const previous = tableDisplayUpdates.get(tableNumber) || Promise.resolve();
+    const next = previous.catch(() => undefined).then(update);
+    tableDisplayUpdates.set(tableNumber, next);
+    return next.finally(() => {
+      if (tableDisplayUpdates.get(tableNumber) === next) tableDisplayUpdates.delete(tableNumber);
+    });
+  }
 
   async function handler(req, res) {
     const url = new URL(req.url, "http://localhost");
@@ -120,19 +130,21 @@ function createServer(options = {}) {
           return sendJson(res, 400, { error: `table number must be between 1 and ${MAX_TABLE_NUMBER}` });
         }
         const tableNumber = Number(welcomeRoute[1]);
-        if (store.getSession(tableNumber).status === "Table is in use") {
-          return sendJson(res, 409, { error: "Table is in use" });
-        }
-
-        try {
-          const result = await epaperClient.updateTableWelcome(tableNumber);
-          if (result?.skipped) {
-            return sendJson(res, 503, { error: "E-paper hub is not configured" });
+        const response = await runTableDisplayUpdate(tableNumber, async () => {
+          if (store.getSession(tableNumber).status === "Table is in use") {
+            return { status: 409, body: { error: "Table is in use" } };
           }
-          return sendJson(res, 200, { ok: true, tableNumber, status: "Welcome" });
-        } catch {
-          return sendJson(res, 502, { error: "E-paper display update failed" });
-        }
+          try {
+            const result = await epaperClient.updateTableWelcome(tableNumber);
+            if (result?.skipped) {
+              return { status: 503, body: { error: "E-paper hub is not configured" } };
+            }
+            return { status: 200, body: { ok: true, tableNumber, status: "Welcome" } };
+          } catch {
+            return { status: 502, body: { error: "E-paper display update failed" } };
+          }
+        });
+        return sendJson(res, response.status, response.body);
       }
 
       if (req.method === "POST" && url.pathname === "/api/orders") {
@@ -145,7 +157,9 @@ function createServer(options = {}) {
         let epaperUpdate = { ok: true };
         if (result.isFirstOrderForSession || pendingEpaperTables.has(tableNumber)) {
           try {
-            epaperUpdate = await epaperClient.updateTableInUse(tableNumber, result.session);
+            epaperUpdate = await runTableDisplayUpdate(tableNumber, () => (
+              epaperClient.updateTableInUse(tableNumber, result.session)
+            ));
             pendingEpaperTables.delete(tableNumber);
           } catch (error) {
             pendingEpaperTables.add(tableNumber);

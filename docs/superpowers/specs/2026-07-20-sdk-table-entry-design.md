@@ -2,11 +2,11 @@
 
 ## Goal
 
-Allow an authorized restaurant system component to initialize any table e-paper with its table number, `Welcome` status, and ordering QR code by calling the e-paper hub SDK from the customer-order server.
+Allow an authorized restaurant system component to initialize an inactive table e-paper with its table number, `Welcome` status, and ordering QR code by calling the e-paper hub SDK from the customer-order server.
 
 ## Scope
 
-This change adds table-display provisioning to `apps/customer-order`. It does not change the e-paper hub API, the SDK public API, customer menu behavior, checkout barcode behavior, or table-session persistence.
+This change adds initial/inactive-table display provisioning to `apps/customer-order`. It does not change the e-paper hub API, the SDK public API, customer menu behavior, checkout barcode behavior, table-session persistence, or session closure. A future cashier checkout/session lifecycle owns closing active sessions; this endpoint is not an active-table reset.
 
 ## Architecture
 
@@ -17,7 +17,7 @@ POST /api/table-displays/:tableNumber/welcome
 Authorization: Bearer <TABLE_DISPLAY_API_KEY>
 ```
 
-The endpoint will validate the bearer credential and table number, build the exact ordering URL from `ORDER_BASE_URL`, and call the existing e-paper SDK through the customer app's e-paper client. The server will never return or expose `TABLE_DISPLAY_API_KEY` or `EPAPER_API_KEY` to browser code.
+The endpoint will validate the bearer credential and table number, reject active sessions with `409`, build the exact ordering URL from `ORDER_BASE_URL`, and call the existing e-paper SDK through the customer app's e-paper client. The server will never return or expose `TABLE_DISPLAY_API_KEY` or `EPAPER_API_KEY` to browser code.
 
 Automatic initialization during server startup is intentionally excluded because a restart must not reset occupied tables to `Welcome`.
 
@@ -46,7 +46,7 @@ The existing first-order flow will continue to call `updateTableInUse`, changing
 
 ## Data Flow
 
-1. An authorized admin or cashier system sends `POST /api/table-displays/7/welcome` with its bearer token.
+1. An authorized admin or cashier system sends `POST /api/table-displays/7/welcome` for an inactive table with its bearer token.
 2. The customer-order server validates the token and table number.
 3. The server builds `ORDER_BASE_URL` with `table=7`.
 4. The e-paper client calls `@restaurant/epaper-hub-sdk` server-side.
@@ -59,6 +59,7 @@ The existing first-order flow will continue to call `updateTableInUse`, changing
 - Successful provisioning returns HTTP `200` with `{ "ok": true, "tableNumber": 7, "status": "Welcome" }`.
 - Missing or incorrect authorization returns HTTP `401` without calling the SDK.
 - A table number outside 1 through 12 returns HTTP `400` without calling the SDK.
+- An active table session returns HTTP `409` with `{ "error": "Table is in use" }` without calling the Welcome SDK update. Closing that session is owned by the future cashier checkout/session lifecycle.
 - A skipped SDK call caused by missing `EPAPER_HUB_URL` or `EPAPER_API_KEY`, or a missing `TABLE_DISPLAY_API_KEY`, returns HTTP `503`.
 - An e-paper hub or SDK failure returns HTTP `502` with a safe error message and does not create or modify an order session.
 - The existing order endpoint keeps its current retry behavior for failed `Table is in use` updates.
@@ -85,6 +86,7 @@ Automated tests will verify:
 - Missing display configuration returns `503`.
 - SDK failures return `502` and do not create a table session.
 - Existing first-order `Table is in use` behavior remains unchanged.
+- A concurrent first order and Welcome provisioning leave the final display at `Table is in use`.
 - `/api/config` never exposes either API key.
 - Root `npm test` remains the completion gate.
 

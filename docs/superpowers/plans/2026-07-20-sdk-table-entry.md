@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Add a protected customer-order endpoint that uses the e-paper hub SDK to display a table-specific `Welcome` screen and ordering QR before customers enter the ordering page.
+**Goal:** Add a protected customer-order endpoint that uses the e-paper hub SDK to display a table-specific `Welcome` screen and ordering QR for inactive tables before customers enter the ordering page.
 
-**Architecture:** Extend the existing customer e-paper client with a shared status updater and `updateTableWelcome(tableNumber)` method. Add one authenticated server route that validates a separate bearer credential, invokes that method, and maps configuration and hub failures to explicit HTTP responses without changing order-session state.
+**Architecture:** Extend the existing customer e-paper client with a shared status updater and `updateTableWelcome(tableNumber)` method. Add one authenticated server route that validates a separate bearer credential, rejects active sessions with `409`, invokes that method for inactive tables, and maps configuration and hub failures to explicit HTTP responses without changing order-session state. Session closure remains the responsibility of a future cashier checkout/session lifecycle; this route is not a reset API.
 
 **Tech Stack:** Node.js 20, CommonJS, native `node:http`, native `node:crypto`, `node:test`, `@restaurant/epaper-hub-sdk`.
 
@@ -16,6 +16,7 @@
 - The provisioning endpoint uses a constant-time bearer-token comparison.
 - Server startup must not automatically reset displays to `Welcome`.
 - Checkout continues to use its existing barcode.
+- Active sessions return `409`; no checkout or session-close API is added by this feature.
 - The e-paper hub API and `@restaurant/epaper-hub-sdk` public API remain unchanged.
 
 ---
@@ -429,7 +430,7 @@ curl -X POST "http://localhost:3100/api/table-displays/7/welcome" \
   -H "Authorization: Bearer $TABLE_DISPLAY_API_KEY"
 ```
 
-This securely uses the server-side e-paper SDK to display table 7, `Welcome`, and a QR for `${ORDER_BASE_URL}?table=7`. Run it when preparing or clearing a table; server startup does not reset displays automatically.
+This securely uses the server-side e-paper SDK to display table 7, `Welcome`, and a QR for `${ORDER_BASE_URL}?table=7`. Run it when preparing an inactive table; server startup does not reset displays automatically. Active tables return `409` and are not reset by this endpoint.
 ````
 
 Add the same endpoint and production URL example to the root `README.md`, using `https://order.yeyintlwin.com` as `ORDER_BASE_URL`.
