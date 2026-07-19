@@ -1,9 +1,10 @@
 services:
   epaper-emulator:
+    image: ${EPAPER_IMAGE:-epaper-emulator}
     build: .
     container_name: epaper-emulator
     restart: unless-stopped
     ports:
       - "127.0.0.1:3000:3000"
     env_file:
-      - .env
+      - ${EPAPER_ENV_FILE:-.env}

@@ -17,6 +17,12 @@ jobs:
       - run: npm ci
       - run: npm test
 
+      - name: Build image
+        run: |
+          set -euo pipefail
+          docker build -t epaper-emulator:${{ github.sha }} .
+          docker save epaper-emulator:${{ github.sha }} | gzip > /tmp/epaper-emulator-image.tgz
+
       - name: Install SSH key
         run: |
           set -euo pipefail
@@ -28,18 +34,23 @@ jobs:
       - name: Upload app
         run: |
           set -euo pipefail
-          tar --exclude='.git' --exclude='node_modules' --exclude='.env' -czf /tmp/epaper-emulator.tgz .
           ssh -i ~/.ssh/lightsail.pem "${{ secrets.LIGHTSAIL_USER }}@${{ secrets.LIGHTSAIL_HOST }}" 'mkdir -p ~/epaper-emulator'
-          scp -i ~/.ssh/lightsail.pem /tmp/epaper-emulator.tgz "${{ secrets.LIGHTSAIL_USER }}@${{ secrets.LIGHTSAIL_HOST }}:~/epaper-emulator/app.tgz"
+          scp -i ~/.ssh/lightsail.pem docker-compose.yml "${{ secrets.LIGHTSAIL_USER }}@${{ secrets.LIGHTSAIL_HOST }}:~/epaper-emulator/docker-compose.yml"
+          scp -i ~/.ssh/lightsail.pem /tmp/epaper-emulator-image.tgz "${{ secrets.LIGHTSAIL_USER }}@${{ secrets.LIGHTSAIL_HOST }}:/tmp/epaper-emulator-image.tgz"
 
       - name: Deploy on Lightsail
         run: |
           set -euo pipefail
           ssh -i ~/.ssh/lightsail.pem "${{ secrets.LIGHTSAIL_USER }}@${{ secrets.LIGHTSAIL_HOST }}" <<'EOF'
           set -euo pipefail
+          if [ ! -f ~/epaper-emulator.env ] && [ -f ~/epaper-emulator/.env ]; then
+            mv ~/epaper-emulator/.env ~/epaper-emulator.env
+          fi
+          test -f ~/epaper-emulator.env
+          docker load -i /tmp/epaper-emulator-image.tgz
+          find ~/epaper-emulator -mindepth 1 -maxdepth 1 ! -name docker-compose.yml ! -name config -exec rm -rf {} +
           cd ~/epaper-emulator
-          tar -xzf app.tgz
-          test -f .env
-          docker compose up -d --build
+          EPAPER_IMAGE=epaper-emulator:${{ github.sha }} EPAPER_ENV_FILE=../epaper-emulator.env docker compose up -d --no-build
           docker image prune -f
+          rm -f /tmp/epaper-emulator-image.tgz
           EOF

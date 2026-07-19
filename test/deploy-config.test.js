@@ -14,6 +14,8 @@ test("Docker Compose exposes app only on localhost for Nginx proxy", () => {
   const compose = fs.readFileSync(path.join(__dirname, "..", "docker-compose.yml"), "utf8");
 
   assert.match(compose, /127\.0\.0\.1:3000:3000/);
+  assert.match(compose, /\$\{EPAPER_IMAGE:-epaper-emulator\}/);
+  assert.match(compose, /\$\{EPAPER_ENV_FILE:-\.env\}/);
   assert.doesNotMatch(compose, /caddy:/);
 });
 
@@ -25,8 +27,12 @@ test("GitHub Actions deploys from GitHub-hosted runner over SSH", () => {
 
   assert.match(workflow, /ubuntu-latest/);
   assert.match(workflow, /LIGHTSAIL_SSH_KEY/);
+  assert.match(workflow, /docker build -t epaper-emulator:\$\{\{ github\.sha \}\}/);
+  assert.match(workflow, /docker save epaper-emulator:\$\{\{ github\.sha \}\}/);
+  assert.match(workflow, /docker load -i \/tmp\/epaper-emulator-image\.tgz/);
   assert.match(workflow, /scp -i/);
   assert.match(workflow, /ssh -i/);
-  assert.match(workflow, /--exclude='\.env'/);
-  assert.doesNotMatch(workflow, /APP_API_KEY|cat > \.env|self-hosted/);
+  assert.match(workflow, /EPAPER_ENV_FILE=\.\.\/epaper-emulator\.env/);
+  assert.match(workflow, /find ~\/epaper-emulator -mindepth 1 -maxdepth 1/);
+  assert.doesNotMatch(workflow, /app\.tgz|tar -xzf|APP_API_KEY|cat > \.env|self-hosted/);
 });
