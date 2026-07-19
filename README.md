@@ -95,6 +95,6 @@ Older debug pixel payload:
 2. Copy this project to the server.
 3. Create `.env` from `.env.example` and set a strong `API_KEY`.
 4. Run `docker compose up -d --build`.
-5. Open port `3000` in the Lightsail firewall, or put Nginx/Caddy in front for HTTPS.
+5. Open ports `80` and `443` in the Lightsail firewall.
 
-For production HTTPS, terminate TLS at Nginx/Caddy or a load balancer and proxy to `http://127.0.0.1:3000`.
+Set `DOMAIN=epaper-hub.yeyintlwin.com` in `.env`. Caddy terminates HTTPS and proxies to the app.
