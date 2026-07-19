@@ -8,3 +8,10 @@ services:
       - "127.0.0.1:3000:3000"
     env_file:
       - ${EPAPER_ENV_FILE:-.env}
+    environment:
+      SCREEN_STORE_FILE: /data/screens.json
+    volumes:
+      - epaper-data:/data
+
+volumes:
+  epaper-data:

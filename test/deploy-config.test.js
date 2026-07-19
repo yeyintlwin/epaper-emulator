@@ -8,6 +8,7 @@ test("Docker image includes server helper modules", () => {
 
   assert.match(dockerfile, /COPY epaper-codec\.js/);
   assert.match(dockerfile, /COPY epaper-request-payload\.js/);
+  assert.match(dockerfile, /COPY screen-store\.js/);
 });
 
 test("Docker Compose exposes app only on localhost for Nginx proxy", () => {
@@ -16,6 +17,9 @@ test("Docker Compose exposes app only on localhost for Nginx proxy", () => {
   assert.match(compose, /127\.0\.0\.1:3000:3000/);
   assert.match(compose, /\$\{EPAPER_IMAGE:-epaper-emulator\}/);
   assert.match(compose, /\$\{EPAPER_ENV_FILE:-\.env\}/);
+  assert.match(compose, /SCREEN_STORE_FILE: \/data\/screens\.json/);
+  assert.match(compose, /epaper-data:\/data/);
+  assert.match(compose, /^volumes:\n  epaper-data:/m);
   assert.doesNotMatch(compose, /caddy:/);
 });
 

@@ -23,6 +23,8 @@ cp .env.example .env
 docker compose up -d --build
 ```
 
+Latest e-paper screen state is persisted in the Docker named volume `epaper-data`, so browser refreshes and container restarts keep the last update.
+
 ## Secure Update API
 
 Open `/api/docs` in the running app for the endpoint reference.
@@ -107,6 +109,7 @@ Older debug pixel payload:
 2. Keep runtime config outside the deploy folder at `~/epaper-emulator.env`.
 3. Keep only `~/epaper-emulator/docker-compose.yml` on the server, plus `~/epaper-emulator/config/` if needed later.
 4. GitHub Actions builds the Docker image, uploads it, and runs `docker compose up -d --no-build`.
-5. Open ports `80` and `443` in the Lightsail firewall.
+5. The latest screen state is stored inside the Docker named volume `epaper-data`, not in the project folder.
+6. Open ports `80` and `443` in the Lightsail firewall.
 
 Run the app on `127.0.0.1:3000` and proxy `epaper-hub.yeyintlwin.com` to it with Nginx.

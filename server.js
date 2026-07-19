@@ -12,10 +12,12 @@ const {
   PACKED_FORMAT
 } = require("./epaper-codec");
 const { selectUpdatePayload } = require("./epaper-request-payload");
+const { createScreenStore } = require("./screen-store");
 require("dotenv").config();
 
 const app = express();
 const port = Number(process.env.PORT || 3000);
+const host = process.env.HOST || undefined;
 const apiKey = process.env.API_KEY || "change-me-before-production";
 const publicRead = process.env.PUBLIC_READ === "true";
 const corsOrigin =
@@ -23,6 +25,7 @@ const corsOrigin =
 
 const DISPLAY_COUNT = 12;
 const VALID_COLORS = new Set(["white", "black", "red"]);
+const screenStore = createScreenStore(process.env.SCREEN_STORE_FILE);
 
 app.use(helmet({ contentSecurityPolicy: false }));
 app.use(cors({ origin: corsOrigin }));
@@ -66,6 +69,11 @@ function defaultScreen(id) {
 
 for (let id = 1; id <= DISPLAY_COUNT; id += 1) {
   screens.set(String(id), defaultScreen(id));
+}
+
+for (const screen of screenStore.load()) {
+  const id = normalizeId(screen && screen.id);
+  if (id) screens.set(id, { ...screens.get(id), ...screen, id: Number(id) });
 }
 
 function safeCompare(a, b) {
@@ -170,6 +178,10 @@ function sendEvent(screen) {
   for (const client of clients) client.write(event);
 }
 
+function saveScreens() {
+  screenStore.save(screens);
+}
+
 function apiDocsHtml() {
   return `<!doctype html>
 <html lang="en">
@@ -270,6 +282,7 @@ app.post("/api/epapers/:id", requireApiKey, (req, res) => {
   };
 
   screens.set(id, screen);
+  saveScreens();
   sendEvent(screen);
   return res.json({ ok: true, screen });
 });
@@ -284,6 +297,7 @@ app.post("/api/update", requireApiKey, (req, res) => {
   };
 
   screens.set(id, screen);
+  saveScreens();
   sendEvent(screen);
   return res.json({ ok: true, screen });
 });
@@ -294,6 +308,7 @@ app.post("/api/reset", requireApiKey, (_req, res) => {
     screens.set(String(id), screen);
     sendEvent(screen);
   }
+  saveScreens();
   res.json({ ok: true });
 });
 
@@ -314,6 +329,6 @@ app.get("/api/events", optionalApiKey, (req, res) => {
   });
 });
 
-app.listen(port, () => {
+app.listen(port, host, () => {
   console.log(`E-paper emulator listening on port ${port}`);
 });
