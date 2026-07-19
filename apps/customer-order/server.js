@@ -1,3 +1,4 @@
+const crypto = require("node:crypto");
 const fs = require("node:fs");
 const http = require("node:http");
 const path = require("node:path");
@@ -45,6 +46,14 @@ function sendJson(res, status, payload) {
   res.end(JSON.stringify(payload));
 }
 
+function bearerMatches(header, expected) {
+  const prefix = "Bearer ";
+  if (!String(header || "").startsWith(prefix) || !expected) return false;
+  const supplied = Buffer.from(String(header).slice(prefix.length));
+  const configured = Buffer.from(String(expected));
+  return supplied.length === configured.length && crypto.timingSafeEqual(supplied, configured);
+}
+
 function contentType(filePath) {
   if (filePath.endsWith(".css")) return "text/css; charset=utf-8";
   if (filePath.endsWith(".js")) return "application/javascript; charset=utf-8";
@@ -71,6 +80,7 @@ function sendStatic(req, res) {
 function createServer(options = {}) {
   const store = options.store || createOrderStore({ now: options.now });
   const pendingEpaperTables = new Set();
+  const tableDisplayApiKey = options.tableDisplayApiKey ?? process.env.TABLE_DISPLAY_API_KEY;
   const epaperClient = options.epaperClient || createEpaperClient({
     hubUrl: process.env.EPAPER_HUB_URL,
     apiKey: process.env.EPAPER_API_KEY || process.env.API_KEY,
@@ -95,6 +105,31 @@ function createServer(options = {}) {
 
       if (req.method === "GET" && url.pathname === "/api/session") {
         return sendJson(res, 200, { session: store.getSession(url.searchParams.get("table_number")) });
+      }
+
+      const welcomeRoute = url.pathname.match(/^\/api\/table-displays\/(\d+)\/welcome$/);
+      if (req.method === "POST" && welcomeRoute) {
+        if (!tableDisplayApiKey) {
+          return sendJson(res, 503, { error: "Table display provisioning is not configured" });
+        }
+        if (!bearerMatches(req.headers.authorization, tableDisplayApiKey)) {
+          return sendJson(res, 401, { error: "Unauthorized" });
+        }
+
+        const tableNumber = Number(welcomeRoute[1]);
+        if (!Number.isInteger(tableNumber) || tableNumber < 1 || tableNumber > MAX_TABLE_NUMBER) {
+          return sendJson(res, 400, { error: `table number must be between 1 and ${MAX_TABLE_NUMBER}` });
+        }
+
+        try {
+          const result = await epaperClient.updateTableWelcome(tableNumber);
+          if (result?.skipped) {
+            return sendJson(res, 503, { error: "E-paper hub is not configured" });
+          }
+          return sendJson(res, 200, { ok: true, tableNumber, status: "Welcome" });
+        } catch {
+          return sendJson(res, 502, { error: "E-paper display update failed" });
+        }
       }
 
       if (req.method === "POST" && url.pathname === "/api/orders") {
@@ -130,13 +165,13 @@ function createServer(options = {}) {
   }
 
   const server = http.createServer(handler);
-  server.inject = async (method, url, body) => {
+  server.inject = async (method, url, body, headers = {}) => {
     const chunks = [];
     const bodyText = body === undefined ? "" : JSON.stringify(body);
     const req = {
       method,
       url,
-      headers: {},
+      headers,
       on(event, listener) {
         if (event === "data" && bodyText) process.nextTick(() => listener(Buffer.from(bodyText)));
         if (event === "end") process.nextTick(listener);

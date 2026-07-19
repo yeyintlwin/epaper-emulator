@@ -2,6 +2,13 @@ const assert = require("node:assert/strict");
 const test = require("node:test");
 const { createServer } = require("../server");
 
+function displayClient(updateTableWelcome) {
+  return {
+    updateTableWelcome,
+    updateTableInUse: async () => ({ ok: true })
+  };
+}
+
 test("placing first order updates e-paper once and keeps slip for later orders", async () => {
   const epaperUpdates = [];
   const server = createServer({
@@ -69,4 +76,114 @@ test("server can reuse epaper hub API_KEY when EPAPER_API_KEY is not set", () =>
   const source = require("node:fs").readFileSync(require.resolve("../server"), "utf8");
 
   assert.match(source, /process\.env\.EPAPER_API_KEY \|\| process\.env\.API_KEY/);
+});
+
+test("authorized provisioning displays the Welcome ordering QR", async () => {
+  const updates = [];
+  const server = createServer({
+    tableDisplayApiKey: "display-secret",
+    epaperClient: displayClient(async (tableNumber) => {
+      updates.push(tableNumber);
+      return { ok: true };
+    })
+  });
+
+  const response = await server.inject(
+    "POST",
+    "/api/table-displays/7/welcome",
+    undefined,
+    { authorization: "Bearer display-secret" }
+  );
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(response.body, { ok: true, tableNumber: 7, status: "Welcome" });
+  assert.deepEqual(updates, [7]);
+});
+
+test("provisioning rejects missing or incorrect authorization", async () => {
+  let updates = 0;
+  const server = createServer({
+    tableDisplayApiKey: "display-secret",
+    epaperClient: displayClient(async () => {
+      updates += 1;
+      return { ok: true };
+    })
+  });
+
+  const missing = await server.inject("POST", "/api/table-displays/7/welcome");
+  const incorrect = await server.inject(
+    "POST",
+    "/api/table-displays/7/welcome",
+    undefined,
+    { authorization: "Bearer wrong-secret" }
+  );
+
+  assert.equal(missing.status, 401);
+  assert.equal(incorrect.status, 401);
+  assert.equal(updates, 0);
+});
+
+test("provisioning rejects table numbers outside 1 through 12", async () => {
+  let updates = 0;
+  const server = createServer({
+    tableDisplayApiKey: "display-secret",
+    epaperClient: displayClient(async () => {
+      updates += 1;
+      return { ok: true };
+    })
+  });
+
+  const response = await server.inject(
+    "POST",
+    "/api/table-displays/13/welcome",
+    undefined,
+    { authorization: "Bearer display-secret" }
+  );
+
+  assert.equal(response.status, 400);
+  assert.equal(updates, 0);
+});
+
+test("provisioning reports missing server display configuration", async () => {
+  const missingKeyServer = createServer({
+    tableDisplayApiKey: "",
+    epaperClient: displayClient(async () => ({ ok: true }))
+  });
+  const missingHubServer = createServer({
+    tableDisplayApiKey: "display-secret",
+    epaperClient: displayClient(async () => ({ skipped: true }))
+  });
+
+  const missingKey = await missingKeyServer.inject("POST", "/api/table-displays/7/welcome");
+  const missingHub = await missingHubServer.inject(
+    "POST",
+    "/api/table-displays/7/welcome",
+    undefined,
+    { authorization: "Bearer display-secret" }
+  );
+
+  assert.equal(missingKey.status, 503);
+  assert.equal(missingHub.status, 503);
+});
+
+test("provisioning maps SDK failures to 502 without changing the session", async () => {
+  const server = createServer({
+    tableDisplayApiKey: "display-secret",
+    epaperClient: displayClient(async () => {
+      throw new Error("Bearer secret must not leak");
+    })
+  });
+
+  const response = await server.inject(
+    "POST",
+    "/api/table-displays/7/welcome",
+    undefined,
+    { authorization: "Bearer display-secret" }
+  );
+  const session = await server.inject("GET", "/api/session?table_number=7");
+
+  assert.equal(response.status, 502);
+  assert.deepEqual(response.body, { error: "E-paper display update failed" });
+  assert.equal(session.body.session.status, "Welcome");
+  assert.deepEqual(session.body.session.orders, []);
 });
