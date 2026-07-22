@@ -221,9 +221,9 @@ function createServer(options = {}) {
               epaperClient.updateTableInUse(tableNumber, visitStore.getOrderingUrl(visit.tableNumber))
             ));
             pendingEpaperTables.delete(tableNumber);
-          } catch (error) {
+          } catch {
             pendingEpaperTables.add(tableNumber);
-            epaperUpdate = { ok: false, pending: true, error: error.message };
+            epaperUpdate = { ok: false, pending: true, error: "E-paper display update failed" };
           }
         }
         return sendJson(res, 201, { ...result, epaperUpdate });

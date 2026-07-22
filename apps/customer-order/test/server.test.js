@@ -131,6 +131,53 @@ test("all protected customer APIs reject missing and forged phone sessions", asy
   }
 });
 
+test("rotating a visit revokes its enrolled cookie across all protected customer APIs", async () => {
+  const visitStore = createVisitStore();
+  const server = createCustomerServer({ visitStore });
+  const cookie = await enrollPhone(server, visitStore, 7);
+  visitStore.beginRotation(7);
+  const requests = [
+    ["GET", "/api/session", undefined],
+    ["POST", "/api/orders", { items: [{ id: "crispy-gyoza", quantity: 1 }] }],
+    ["POST", "/api/staff-calls", { reason: "Water" }]
+  ];
+
+  for (const [method, path, body] of requests) {
+    const headers = method === "GET" ? { cookie } : customerHeaders(cookie);
+    const response = await server.inject(method, path, body, headers);
+    assert.equal(response.status, 401, `${method} ${path}`);
+  }
+});
+
+test("customer mutations reauthorize after body parsing before mutating", async () => {
+  for (const path of ["/api/orders", "/api/staff-calls"]) {
+    let resolutions = 0;
+    let orderMutations = 0;
+    let staffMutations = 0;
+    const visitStore = {
+      enroll: () => null,
+      getOrderingUrl: () => "https://order.yeyintlwin.com/t/current-visit-token",
+      markInUse: () => null,
+      resolvePhoneSession: () => (++resolutions === 1 ? { tableNumber: 7 } : null)
+    };
+    const store = {
+      placeOrder: () => { orderMutations += 1; },
+      callStaff: () => { staffMutations += 1; }
+    };
+    const server = createCustomerServer({ visitStore, store });
+    const body = path === "/api/orders"
+      ? { items: [{ id: "crispy-gyoza", quantity: 1 }] }
+      : { reason: "Water" };
+
+    const response = await server.inject("POST", path, body, customerHeaders("rsid=controlled-session"));
+
+    assert.equal(response.status, 401, path);
+    assert.equal(resolutions, 2, path);
+    assert.equal(orderMutations, 0, path);
+    assert.equal(staffMutations, 0, path);
+  }
+});
+
 test("customer mutations require the configured origin before changing an order", async () => {
   const visitStore = createVisitStore();
   const server = createCustomerServer({ visitStore });
@@ -453,6 +500,35 @@ test("keeps a stored order successful and retries a failed e-paper update", asyn
   assert.equal(first.status, 201);
   assert.equal(second.status, 201);
   assert.equal(attempts, 2);
+});
+
+test("does not expose e-paper client failure details in an order response", async () => {
+  const visitStore = createVisitStore();
+  const orderingUrl = visitStore.getOrderingUrl(7);
+  const bearerValue = "Bearer future-client-secret";
+  const server = createCustomerServer({
+    visitStore,
+    epaperClient: {
+      updateTableInUse: async () => {
+        throw new Error(`Failed to update ${orderingUrl} with ${bearerValue}`);
+      }
+    }
+  });
+  const cookie = await enrollPhone(server, visitStore, 7);
+
+  const response = await server.inject("POST", "/api/orders", {
+    items: [{ id: "crispy-gyoza", quantity: 1 }]
+  }, customerHeaders(cookie));
+
+  assert.equal(response.status, 201);
+  assert.deepEqual(response.body.epaperUpdate, {
+    ok: false,
+    pending: true,
+    error: "E-paper display update failed"
+  });
+  const responseText = JSON.stringify(response.body);
+  assert.equal(responseText.includes(orderingUrl), false);
+  assert.equal(responseText.includes(bearerValue), false);
 });
 
 test("frontend config endpoint does not expose e-paper or display secrets", async () => {
