@@ -575,6 +575,30 @@ test("checkout rejects missing and same-length incorrect bearer authorization", 
   assert.equal(updates, 0);
 });
 
+test("checkout returns 401 for missing and wrong authorization when its key is not configured", async () => {
+  let updates = 0;
+  const server = createServer({
+    checkoutApiKey: "",
+    epaperClient: displayClient(async () => {
+      updates += 1;
+      return { ok: true };
+    })
+  });
+
+  const missing = await server.inject("POST", "/api/tables/7/checkout");
+  const wrong = await server.inject(
+    "POST",
+    "/api/tables/7/checkout",
+    undefined,
+    { authorization: `Bearer ${CHECKOUT_API_KEY}` }
+  );
+
+  assert.equal(missing.status, 401);
+  assert.equal(wrong.status, 401);
+  assert.deepEqual(wrong.body, missing.body);
+  assert.equal(updates, 0);
+});
+
 test("checkout rejects noncanonical table number segments", async () => {
   let updates = 0;
   const server = createServer({
@@ -654,7 +678,84 @@ test("checkout rotates the QR, revokes all phones, closes the order, and renders
   assert.equal(responseText.includes(CHECKOUT_API_KEY), false);
 });
 
+test("simultaneous checkout requests share one in-flight rotation and safe response", async () => {
+  let releaseDisplay;
+  const displayHeld = new Promise((resolve) => {
+    releaseDisplay = resolve;
+  });
+  let displayStarted;
+  const displayBegun = new Promise((resolve) => {
+    displayStarted = resolve;
+  });
+  const welcomeUrls = [];
+  const visitStore = createVisitStore();
+  const before = visitStore.getCurrentVisit(7);
+  const oldToken = visitStore.getRawTokenForDisplay(7);
+  const server = createCustomerServer({
+    checkoutApiKey: CHECKOUT_API_KEY,
+    visitStore,
+    epaperClient: displayClient(async (_tableNumber, orderingUrl) => {
+      welcomeUrls.push(orderingUrl);
+      displayStarted();
+      await displayHeld;
+      return { ok: true };
+    })
+  });
+
+  const first = server.inject(
+    "POST",
+    "/api/tables/7/checkout",
+    undefined,
+    { authorization: `Bearer ${CHECKOUT_API_KEY}` }
+  );
+  await displayBegun;
+  const pending = visitStore.getCurrentVisit(7);
+  const pendingToken = visitStore.getRawTokenForDisplay(7);
+  const second = server.inject(
+    "POST",
+    "/api/tables/7/checkout",
+    undefined,
+    { authorization: `Bearer ${CHECKOUT_API_KEY}` }
+  );
+  const third = server.inject(
+    "POST",
+    "/api/tables/7/checkout",
+    undefined,
+    { authorization: `Bearer ${CHECKOUT_API_KEY}` }
+  );
+  await new Promise(setImmediate);
+
+  assert.equal(welcomeUrls.length, 1);
+  assert.equal(pending.generation, before.generation + 1);
+  assert.notEqual(pendingToken, oldToken);
+  releaseDisplay();
+
+  const responses = await Promise.all([first, second, third]);
+  const completed = visitStore.getCurrentVisit(7);
+  const expectedBody = { ok: true, tableNumber: 7, status: "Welcome" };
+
+  for (const response of responses) {
+    assert.equal(response.status, 200);
+    assert.deepEqual(response.body, expectedBody);
+    assert.equal(JSON.stringify(response.body).includes(pending.orderingUrl), false);
+    assert.equal(JSON.stringify(response.body).includes(pendingToken), false);
+  }
+  assert.deepEqual(welcomeUrls, [pending.orderingUrl]);
+  assert.equal(completed.generation, pending.generation);
+  assert.equal(completed.orderingUrl, pending.orderingUrl);
+  assert.equal(visitStore.getRawTokenForDisplay(7), pendingToken);
+  assert.equal(completed.status, "welcome");
+});
+
 test("checkout failure keeps revocation and closed orders while retrying one pending replacement", async () => {
+  let rejectDisplay;
+  const displayHeld = new Promise((_resolve, reject) => {
+    rejectDisplay = reject;
+  });
+  let displayStarted;
+  const displayBegun = new Promise((resolve) => {
+    displayStarted = resolve;
+  });
   const welcomeUrls = [];
   const visitStore = createVisitStore();
   const store = createOrderStore({ now: () => new Date("2026-07-22T03:00:00Z") });
@@ -667,7 +768,8 @@ test("checkout failure keeps revocation and closed orders while retrying one pen
       updateTableWelcome: async (_tableNumber, orderingUrl) => {
         welcomeUrls.push(orderingUrl);
         if (welcomeUrls.length === 1) {
-          throw new Error(`Failed to render ${orderingUrl} with Bearer ${CHECKOUT_API_KEY}`);
+          displayStarted();
+          return displayHeld;
         }
         return { ok: true };
       }
@@ -681,12 +783,22 @@ test("checkout failure keeps revocation and closed orders while retrying one pen
     items: [{ id: "crispy-gyoza", quantity: 1 }]
   }, customerHeaders(firstCookie));
 
-  const first = await server.inject(
+  const firstRequest = server.inject(
     "POST",
     "/api/tables/7/checkout",
     undefined,
     { authorization: `Bearer ${CHECKOUT_API_KEY}` }
   );
+  await displayBegun;
+  const sharedRequest = server.inject(
+    "POST",
+    "/api/tables/7/checkout",
+    undefined,
+    { authorization: `Bearer ${CHECKOUT_API_KEY}` }
+  );
+  await new Promise(setImmediate);
+  rejectDisplay(new Error(`Failed to render with Bearer ${CHECKOUT_API_KEY}`));
+  const [first, shared] = await Promise.all([firstRequest, sharedRequest]);
   const pending = visitStore.getCurrentVisit(7);
   const pendingToken = visitStore.getRawTokenForDisplay(7);
   const oldQr = await server.inject("GET", `/t/${oldToken}`);
@@ -695,6 +807,9 @@ test("checkout failure keeps revocation and closed orders while retrying one pen
 
   assert.equal(first.status, 502);
   assert.deepEqual(first.body, { error: "E-paper display update failed" });
+  assert.equal(shared.status, 502);
+  assert.deepEqual(shared.body, first.body);
+  assert.deepEqual(welcomeUrls, [pending.orderingUrl]);
   assert.equal(pending.status, "pending_display");
   assert.equal(pending.generation, before.generation + 1);
   assert.equal(oldQr.status, 410);
@@ -705,7 +820,7 @@ test("checkout failure keeps revocation and closed orders while retrying one pen
   assert.equal(JSON.stringify(first.body).includes(pendingToken), false);
   assert.equal(JSON.stringify(first.body).includes(CHECKOUT_API_KEY), false);
 
-  const second = await server.inject(
+  const retry = await server.inject(
     "POST",
     "/api/tables/7/checkout",
     undefined,
@@ -713,8 +828,8 @@ test("checkout failure keeps revocation and closed orders while retrying one pen
   );
   const completed = visitStore.getCurrentVisit(7);
 
-  assert.equal(second.status, 200);
-  assert.deepEqual(second.body, { ok: true, tableNumber: 7, status: "Welcome" });
+  assert.equal(retry.status, 200);
+  assert.deepEqual(retry.body, { ok: true, tableNumber: 7, status: "Welcome" });
   assert.deepEqual(welcomeUrls, [pending.orderingUrl, pending.orderingUrl]);
   assert.equal(completed.generation, pending.generation);
   assert.equal(completed.orderingUrl, pending.orderingUrl);
