@@ -74,7 +74,11 @@ test("GitHub Actions deploys from GitHub-hosted runner over SSH", () => {
   assert.doesNotMatch(workflow, /working-directory: apps\/epaper-hub/);
   assert.match(workflow, /docker build -t epaper-hub:\$\{\{ github\.sha \}\} apps\/epaper-hub/);
   assert.match(workflow, /docker save epaper-hub:\$\{\{ github\.sha \}\}/);
+  assert.match(workflow, /docker build -f apps\/customer-order\/Dockerfile -t customer-order:\$\{\{ github\.sha \}\} \./);
+  assert.match(workflow, /docker save customer-order:\$\{\{ github\.sha \}\}/);
+  assert.match(workflow, /customer-order-image\.tgz/);
   assert.match(workflow, /docker load -i \/tmp\/epaper-hub-image\.tgz/);
+  assert.match(workflow, /docker load -i \/tmp\/customer-order-image\.tgz/);
   assert.match(workflow, /scp -i/);
   assert.match(workflow, /apps\/epaper-hub\/docker-compose\.yml/);
   assert.match(workflow, /ssh -i/);
@@ -84,6 +88,7 @@ test("GitHub Actions deploys from GitHub-hosted runner over SSH", () => {
   assert.match(workflow, /docker volume create restaurant-order-system_epaper-data/);
   assert.match(workflow, /epaper-emulator_epaper-data/);
   assert.match(workflow, /EPAPER_ENV_FILE=\.\.\/restaurant-order-system\.env/);
+  assert.match(workflow, /CUSTOMER_ORDER_IMAGE=customer-order:\$\{\{ github\.sha \}\}/);
   assert.match(workflow, /find ~\/restaurant-order-system -mindepth 1 -maxdepth 1/);
   assert.doesNotMatch(workflow, /docker build -t epaper-hub:\$\{\{ github\.sha \}\} \./);
   assert.doesNotMatch(workflow, /app\.tgz|tar -xzf|APP_API_KEY|cat > \.env|self-hosted/);

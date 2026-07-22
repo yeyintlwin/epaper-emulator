@@ -26,11 +26,13 @@ jobs:
 
       - run: npm --prefix apps/customer-order test
 
-      - name: Build image
+      - name: Build images
         run: |
           set -euo pipefail
           docker build -t epaper-hub:${{ github.sha }} apps/epaper-hub
+          docker build -f apps/customer-order/Dockerfile -t customer-order:${{ github.sha }} .
           docker save epaper-hub:${{ github.sha }} | gzip > /tmp/epaper-hub-image.tgz
+          docker save customer-order:${{ github.sha }} | gzip > /tmp/customer-order-image.tgz
 
       - name: Install SSH key
         run: |
@@ -46,6 +48,7 @@ jobs:
           ssh -i ~/.ssh/lightsail.pem "${{ secrets.LIGHTSAIL_USER }}@${{ secrets.LIGHTSAIL_HOST }}" 'mkdir -p ~/restaurant-order-system'
           scp -i ~/.ssh/lightsail.pem apps/epaper-hub/docker-compose.yml "${{ secrets.LIGHTSAIL_USER }}@${{ secrets.LIGHTSAIL_HOST }}:~/restaurant-order-system/docker-compose.yml"
           scp -i ~/.ssh/lightsail.pem /tmp/epaper-hub-image.tgz "${{ secrets.LIGHTSAIL_USER }}@${{ secrets.LIGHTSAIL_HOST }}:/tmp/epaper-hub-image.tgz"
+          scp -i ~/.ssh/lightsail.pem /tmp/customer-order-image.tgz "${{ secrets.LIGHTSAIL_USER }}@${{ secrets.LIGHTSAIL_HOST }}:/tmp/customer-order-image.tgz"
 
       - name: Deploy on Lightsail
         run: |
@@ -71,6 +74,7 @@ jobs:
           fi
           rm -rf ~/epaper-emulator
           docker load -i /tmp/epaper-hub-image.tgz
+          docker load -i /tmp/customer-order-image.tgz
           docker volume create restaurant-order-system_epaper-data
           if docker volume inspect epaper-emulator_epaper-data >/dev/null 2>&1; then
             if ! docker run --rm -v restaurant-order-system_epaper-data:/to epaper-hub:${{ github.sha }} test -f /to/screens.json; then
@@ -79,7 +83,7 @@ jobs:
           fi
           find ~/restaurant-order-system -mindepth 1 -maxdepth 1 ! -name docker-compose.yml ! -name config -exec rm -rf {} +
           cd ~/restaurant-order-system
-          EPAPER_IMAGE=epaper-hub:${{ github.sha }} EPAPER_ENV_FILE=../restaurant-order-system.env docker compose up -d --no-build
+          EPAPER_IMAGE=epaper-hub:${{ github.sha }} CUSTOMER_ORDER_IMAGE=customer-order:${{ github.sha }} EPAPER_ENV_FILE=../restaurant-order-system.env docker compose up -d --no-build
           docker image prune -f
-          rm -f /tmp/epaper-hub-image.tgz
+          rm -f /tmp/epaper-hub-image.tgz /tmp/customer-order-image.tgz
           EOF
