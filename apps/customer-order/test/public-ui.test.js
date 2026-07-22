@@ -42,5 +42,12 @@ test("mobile customer UI uses native-style bottom navigation and a menu category
   assert.match(js, /openDrawer/);
   assert.match(js, /renderHistory/);
   assert.match(js, /renderBarcode/);
+  assert.match(html, /id="rescanMessage"[^>]*hidden/);
+  assert.match(html, /Scan the current table QR to continue/);
+  assert.match(js, /api\("\/api\/session"\)/);
+  assert.match(js, /sessionResult\.session\.tableNumber/);
+  assert.match(js, /classList\.add\("rescanRequired"\)/);
+  assert.match(js, /response\.status === 401 \|\| response\.status === 410/);
+  assert.doesNotMatch(js, /getTableNumber|table_number|api\(`\/api\/session\?/);
   assert.doesNotMatch(js, /EPAPER_API_KEY|TABLE_DISPLAY_API_KEY|API_KEY|Bearer/);
 });

@@ -7,6 +7,7 @@ const { createOrderStore, MAX_TABLE_NUMBER } = require("./order-store");
 const { createTableVisitStore } = require("./table-visit-store");
 
 const PUBLIC_ROOT = path.join(__dirname, "public");
+const DEFAULT_ORDER_BASE_URL = "https://order.yeyintlwin.com";
 
 function createConfiguredEpaperClient(requireStartupConfiguration = false) {
   const hubUrl = process.env.EPAPER_HUB_URL;
@@ -69,6 +70,22 @@ function bearerMatches(header, expected) {
   return crypto.timingSafeEqual(supplied, configured);
 }
 
+function cookieValue(header, name) {
+  for (const part of String(header || "").split(";")) {
+    const [key, ...rest] = part.trim().split("=");
+    if (key === name) return rest.join("=");
+  }
+  return "";
+}
+
+function authorizedVisit(req, visitStore) {
+  return visitStore.resolvePhoneSession(cookieValue(req.headers.cookie, "rsid"));
+}
+
+function acceptsJson(req) {
+  return /^application\/json(?:\s*;\s*charset=utf-8)?$/i.test(String(req.headers["content-type"] || ""));
+}
+
 function contentType(filePath) {
   if (filePath.endsWith(".css")) return "text/css; charset=utf-8";
   if (filePath.endsWith(".js")) return "application/javascript; charset=utf-8";
@@ -95,9 +112,10 @@ function sendStatic(req, res) {
 function createServer(options = {}) {
   const store = options.store || createOrderStore({ now: options.now });
   const visitStore = options.visitStore;
-  if (!visitStore || typeof visitStore.getOrderingUrl !== "function") {
+  if (!visitStore || ["getOrderingUrl", "enroll", "resolvePhoneSession", "markInUse"].some((method) => typeof visitStore[method] !== "function")) {
     throw new Error("visitStore is required and must provide getOrderingUrl");
   }
+  const orderOrigin = new URL(options.orderBaseUrl || process.env.ORDER_BASE_URL || DEFAULT_ORDER_BASE_URL).origin;
   const pendingEpaperTables = new Set();
   const tableDisplayUpdates = new Map();
   const tableDisplayApiKey = options.tableDisplayApiKey ?? process.env.TABLE_DISPLAY_API_KEY;
@@ -128,8 +146,28 @@ function createServer(options = {}) {
         return sendJson(res, 200, store.getMenu());
       }
 
+      const enrollmentRoute = url.pathname.match(/^\/t\/([^/]+)$/);
+      if (req.method === "GET" && enrollmentRoute) {
+        const enrollment = visitStore.enroll(enrollmentRoute[1]);
+        if (!enrollment) {
+          return sendJson(res, 410, { error: "Table visit is no longer available" });
+        }
+        const expiresAt = Date.parse(enrollment.visit.expiresAt);
+        const maxAge = Number.isFinite(expiresAt)
+          ? Math.max(0, Math.floor((expiresAt - Date.now()) / 1000))
+          : 0;
+        res.writeHead(302, {
+          Location: "/",
+          "Set-Cookie": `rsid=${enrollment.sessionId}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${maxAge}`,
+          "Cache-Control": "no-store"
+        });
+        return res.end();
+      }
+
       if (req.method === "GET" && url.pathname === "/api/session") {
-        return sendJson(res, 200, { session: store.getSession(url.searchParams.get("table_number")) });
+        const visit = authorizedVisit(req, visitStore);
+        if (!visit) return sendJson(res, 401, { error: "Scan the current table QR to continue" });
+        return sendJson(res, 200, { session: store.getSession(visit.tableNumber) });
       }
 
       const welcomeRoute = url.pathname.match(/^\/api\/table-displays\/([^/]+)\/welcome$/);
@@ -163,17 +201,24 @@ function createServer(options = {}) {
       }
 
       if (req.method === "POST" && url.pathname === "/api/orders") {
+        let visit = authorizedVisit(req, visitStore);
+        if (!visit) return sendJson(res, 401, { error: "Scan the current table QR to continue" });
+        if (req.headers.origin !== orderOrigin) return sendJson(res, 403, { error: "Forbidden" });
+        if (!acceptsJson(req)) return sendJson(res, 415, { error: "Content-Type must be application/json" });
         const body = await readBody(req);
+        visit = authorizedVisit(req, visitStore);
+        if (!visit) return sendJson(res, 401, { error: "Scan the current table QR to continue" });
         const result = store.placeOrder({
-          tableNumber: body.table_number,
+          tableNumber: visit.tableNumber,
           items: body.items
         });
-        const tableNumber = result.session.tableNumber;
+        visitStore.markInUse(visit.tableNumber);
+        const tableNumber = visit.tableNumber;
         let epaperUpdate = { ok: true };
         if (result.isFirstOrderForSession || pendingEpaperTables.has(tableNumber)) {
           try {
             epaperUpdate = await runTableDisplayUpdate(tableNumber, () => (
-              epaperClient.updateTableInUse(tableNumber, visitStore.getOrderingUrl(tableNumber))
+              epaperClient.updateTableInUse(tableNumber, visitStore.getOrderingUrl(visit.tableNumber))
             ));
             pendingEpaperTables.delete(tableNumber);
           } catch (error) {
@@ -185,8 +230,14 @@ function createServer(options = {}) {
       }
 
       if (req.method === "POST" && url.pathname === "/api/staff-calls") {
+        let visit = authorizedVisit(req, visitStore);
+        if (!visit) return sendJson(res, 401, { error: "Scan the current table QR to continue" });
+        if (req.headers.origin !== orderOrigin) return sendJson(res, 403, { error: "Forbidden" });
+        if (!acceptsJson(req)) return sendJson(res, 415, { error: "Content-Type must be application/json" });
         const body = await readBody(req);
-        return sendJson(res, 201, { call: store.callStaff(body.table_number, body.reason) });
+        visit = authorizedVisit(req, visitStore);
+        if (!visit) return sendJson(res, 401, { error: "Scan the current table QR to continue" });
+        return sendJson(res, 201, { call: store.callStaff(visit.tableNumber, body.reason) });
       }
 
       if (req.method === "GET") return sendStatic(req, res);
@@ -305,7 +356,7 @@ async function start(options = {}) {
   const epaperClient = options.epaperClient || createConfiguredEpaperClient(true);
   const visitStore = options.visitStore || createTableVisitStore({
     shopId: "1",
-    orderBaseUrl: options.orderBaseUrl || process.env.ORDER_BASE_URL || "https://order.yeyintlwin.com"
+    orderBaseUrl: options.orderBaseUrl || process.env.ORDER_BASE_URL || DEFAULT_ORDER_BASE_URL
   });
   visitStore.createInitialVisits();
   const server = options.server || createServer({ ...options, epaperClient, visitStore });

@@ -1,10 +1,11 @@
 const state = {
-  tableNumber: 1,
+  tableNumber: null,
   menu: { tabs: [], items: [] },
   activeTab: "Recommended",
   activeView: "menu",
   cart: new Map(),
-  session: null
+  session: null,
+  rescanRequired: false
 };
 
 const fallbackTabs = ["Recommended", "All Items", "Service & Utensils", "Desserts", "Soft Drinks", "Alcoholic Drinks"];
@@ -24,10 +25,12 @@ function showToast(message) {
   window.setTimeout(() => toast.classList.remove("show"), 2200);
 }
 
-function getTableNumber() {
-  const params = new URLSearchParams(window.location.search);
-  const value = Number(params.get("table_number") || params.get("table") || 1);
-  return Number.isInteger(value) && value >= 1 && value <= 12 ? value : 1;
+function requireRescan() {
+  state.rescanRequired = true;
+  document.documentElement.classList.add("rescanRequired");
+  $("#rescanMessage").hidden = false;
+  document.querySelectorAll("[data-inc], [data-dec], #placeOrderButton, #callStaffButton")
+    .forEach((button) => { button.disabled = true; });
 }
 
 async function api(path, options) {
@@ -36,7 +39,10 @@ async function api(path, options) {
     ...options
   });
   const body = await response.json();
-  if (!response.ok) throw new Error(body.error || "Request failed");
+  if (!response.ok) {
+    if (response.status === 401 || response.status === 410) requireRescan();
+    throw new Error(body.error || "Request failed");
+  }
   return body;
 }
 
@@ -94,6 +100,7 @@ function renderMenu() {
     ? items
         .map((item) => {
           const qty = quantityFor(item.id);
+          const disabled = state.rescanRequired ? " disabled" : "";
           return `<article class="menuItem">
             <div class="dishMark">${item.name.slice(0, 2).toUpperCase()}</div>
             <div>
@@ -102,9 +109,9 @@ function renderMenu() {
               <strong>${money.format(item.price)}</strong>
             </div>
             <div class="stepper" aria-label="${item.name} quantity">
-              <button type="button" data-dec="${item.id}">-</button>
+              <button type="button" data-dec="${item.id}"${disabled}>-</button>
               <span>${qty}</span>
-              <button type="button" data-inc="${item.id}">+</button>
+              <button type="button" data-inc="${item.id}"${disabled}>+</button>
             </div>
           </article>`;
         })
@@ -131,7 +138,7 @@ function renderBucket() {
   $("#cartItems").innerHTML = lines.length
     ? lines.map((item) => `<div class="cartLine"><span>${item.quantity} x ${item.name}</span><strong>${money.format(item.price * item.quantity)}</strong></div>`).join("")
     : `<p class="empty">Choose dishes from the Menu tab.</p>`;
-  $("#placeOrderButton").disabled = lines.length === 0;
+  $("#placeOrderButton").disabled = state.rescanRequired || lines.length === 0;
 }
 
 function renderHistory() {
@@ -183,7 +190,7 @@ async function placeOrder() {
   const items = cartLines().map((item) => ({ id: item.id, quantity: item.quantity }));
   const result = await api("/api/orders", {
     method: "POST",
-    body: JSON.stringify({ table_number: state.tableNumber, items })
+    body: JSON.stringify({ items })
   });
   state.session = result.session;
   state.cart.clear();
@@ -197,19 +204,19 @@ async function placeOrder() {
 async function callStaff() {
   await api("/api/staff-calls", {
     method: "POST",
-    body: JSON.stringify({ table_number: state.tableNumber, reason: "Customer requested staff" })
+    body: JSON.stringify({ reason: "Customer requested staff" })
   });
   showToast("Staff call sent.");
 }
 
 async function init() {
-  state.tableNumber = getTableNumber();
   const [menu, sessionResult] = await Promise.all([
     api("/api/menu"),
-    api(`/api/session?table_number=${state.tableNumber}`)
+    api("/api/session")
   ]);
   state.menu = menu;
   state.session = sessionResult.session;
+  state.tableNumber = sessionResult.session.tableNumber;
   renderSession();
   renderMenu();
   renderBucket();

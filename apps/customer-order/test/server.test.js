@@ -4,10 +4,13 @@ const test = require("node:test");
 const { createTableVisitStore } = require("../table-visit-store");
 const { createServer: createCustomerServer, initializeTableDisplays: initializeCustomerTableDisplays, start } = require("../server");
 
-function createVisitStore() {
+const ORDER_ORIGIN = "https://order.yeyintlwin.com";
+
+function createVisitStore(options = {}) {
   const visitStore = createTableVisitStore({
     shopId: "1",
-    orderBaseUrl: "https://order.yeyintlwin.com"
+    orderBaseUrl: ORDER_ORIGIN,
+    ...options
   });
   visitStore.createInitialVisits();
   return visitStore;
@@ -21,8 +24,148 @@ function initializeTableDisplays(options = {}) {
   return initializeCustomerTableDisplays({ visitStore: createVisitStore(), ...options });
 }
 
+async function enrollPhone(server, visitStore, tableNumber) {
+  const token = visitStore.getRawTokenForDisplay(tableNumber);
+  const response = await server.inject("GET", `/t/${token}`);
+  assert.equal(response.status, 302, "phone enrollment");
+  return response.headers["Set-Cookie"].split(";")[0];
+}
+
+function customerHeaders(cookie, headers = {}) {
+  return {
+    cookie,
+    origin: ORDER_ORIGIN,
+    "content-type": "application/json",
+    ...headers
+  };
+}
+
 test("createServer requires an explicit visit store", () => {
   assert.throws(() => createCustomerServer(), /visitStore is required/);
+});
+
+test("enrolling a current table QR creates a secure opaque phone session", async () => {
+  const visitStore = createVisitStore();
+  const server = createCustomerServer({ visitStore });
+  const token = visitStore.getRawTokenForDisplay(7);
+
+  const response = await server.inject("GET", `/t/${token}`);
+
+  assert.equal(response.status, 302);
+  assert.equal(response.headers.Location, "/");
+  assert.match(response.headers["Set-Cookie"], /^rsid=[A-Za-z0-9_-]{22}; Path=\/; HttpOnly; Secure; SameSite=Lax; Max-Age=\d+$/);
+  assert.equal(response.headers["Cache-Control"], "no-store");
+  assert.doesNotMatch(response.headers.Location, /table|shop|date/);
+  assert.doesNotMatch(JSON.stringify(response), new RegExp(token));
+});
+
+test("malformed, unknown, expired, and superseded QR tokens have one 410 response", async () => {
+  let now = new Date("2026-07-22T20:59:59Z");
+  const expiredStore = createVisitStore({ now: () => now });
+  const expiredToken = expiredStore.getRawTokenForDisplay(7);
+  now = new Date("2026-07-22T21:00:00Z");
+
+  const supersededStore = createVisitStore();
+  const supersededToken = supersededStore.getRawTokenForDisplay(7);
+  supersededStore.beginRotation(7);
+
+  const cases = [
+    { server: createServer(), token: "malformed" },
+    { server: createServer(), token: "A".repeat(22) },
+    { server: createCustomerServer({ visitStore: expiredStore }), token: expiredToken },
+    { server: createCustomerServer({ visitStore: supersededStore }), token: supersededToken }
+  ];
+  const responses = [];
+  for (const entry of cases) responses.push(await entry.server.inject("GET", `/t/${entry.token}`));
+
+  for (const response of responses) assert.equal(response.status, 410);
+  for (const response of responses.slice(1)) assert.deepEqual(response.body, responses[0].body);
+  for (let index = 0; index < responses.length; index += 1) {
+    assert.doesNotMatch(JSON.stringify(responses[index]), new RegExp(cases[index].token));
+  }
+});
+
+test("two phones enrolled from one QR share one table slip and ignore injected table numbers", async () => {
+  const visitStore = createVisitStore();
+  const server = createCustomerServer({
+    visitStore,
+    epaperClient: { updateTableInUse: async () => ({ ok: true }) }
+  });
+  const firstCookie = await enrollPhone(server, visitStore, 7);
+  const secondCookie = await enrollPhone(server, visitStore, 7);
+
+  const order = await server.inject("POST", "/api/orders", {
+    table_number: 12,
+    items: [{ id: "crispy-gyoza", quantity: 1 }]
+  }, customerHeaders(firstCookie));
+  const session = await server.inject("GET", "/api/session?table_number=12", undefined, { cookie: secondCookie });
+  const staffCall = await server.inject("POST", "/api/staff-calls", {
+    table_number: 12,
+    reason: "Water"
+  }, customerHeaders(secondCookie));
+
+  assert.notEqual(firstCookie, secondCookie);
+  assert.equal(order.status, 201);
+  assert.equal(session.status, 200);
+  assert.equal(order.body.session.tableNumber, 7);
+  assert.equal(session.body.session.tableNumber, 7);
+  assert.equal(staffCall.body.call.tableNumber, 7);
+  assert.equal(session.body.session.slipNumber, order.body.session.slipNumber);
+  assert.deepEqual(session.body.session.orders, order.body.session.orders);
+});
+
+test("all protected customer APIs reject missing and forged phone sessions", async () => {
+  const server = createServer();
+  const requests = [
+    ["GET", "/api/session", undefined],
+    ["POST", "/api/orders", { items: [{ id: "crispy-gyoza", quantity: 1 }] }],
+    ["POST", "/api/staff-calls", { reason: "Water" }]
+  ];
+
+  for (const cookie of [undefined, `rsid=${"A".repeat(22)}`]) {
+    for (const [method, path, body] of requests) {
+      const headers = method === "GET" ? { cookie } : customerHeaders(cookie);
+      const response = await server.inject(method, path, body, headers);
+      assert.equal(response.status, 401, `${method} ${path}`);
+    }
+  }
+});
+
+test("customer mutations require the configured origin before changing an order", async () => {
+  const visitStore = createVisitStore();
+  const server = createCustomerServer({ visitStore });
+  const cookie = await enrollPhone(server, visitStore, 7);
+  const body = { items: [{ id: "crispy-gyoza", quantity: 1 }] };
+
+  for (const origin of [undefined, "https://attacker.example"]) {
+    for (const path of ["/api/orders", "/api/staff-calls"]) {
+      const response = await server.inject("POST", path, body, customerHeaders(cookie, { origin }));
+      assert.equal(response.status, 403, path);
+    }
+  }
+  const session = await server.inject("GET", "/api/session", undefined, { cookie });
+  assert.equal(session.body.session.orders.length, 0);
+});
+
+test("customer mutations accept JSON with an optional charset and reject other content types", async () => {
+  const visitStore = createVisitStore();
+  const server = createCustomerServer({
+    visitStore,
+    epaperClient: { updateTableInUse: async () => ({ ok: true }) }
+  });
+  const cookie = await enrollPhone(server, visitStore, 7);
+
+  for (const contentType of ["text/plain", "application/x-www-form-urlencoded"]) {
+    for (const path of ["/api/orders", "/api/staff-calls"]) {
+      const response = await server.inject("POST", path, {}, customerHeaders(cookie, { "content-type": contentType }));
+      assert.equal(response.status, 415, path);
+    }
+  }
+  const accepted = await server.inject("POST", "/api/orders", {
+    items: [{ id: "crispy-gyoza", quantity: 1 }]
+  }, customerHeaders(cookie, { "content-type": "application/json; charset=utf-8" }));
+  assert.equal(accepted.status, 201);
+  assert.equal(accepted.body.session.orders.length, 1);
 });
 
 function displayClient(updateTableWelcome) {
@@ -271,15 +414,14 @@ test("placing first order updates e-paper once with the current opaque URL", asy
       }
     }
   });
+  const cookie = await enrollPhone(server, visitStore, 4);
 
   const first = await server.inject("POST", "/api/orders", {
-    table_number: 4,
     items: [{ id: "crispy-gyoza", quantity: 1 }]
-  });
+  }, customerHeaders(cookie));
   const second = await server.inject("POST", "/api/orders", {
-    table_number: 4,
     items: [{ id: "green-tea-ice-cream", quantity: 1 }]
-  });
+  }, customerHeaders(cookie));
 
   assert.equal(first.status, 201);
   assert.equal(second.status, 201);
@@ -289,7 +431,9 @@ test("placing first order updates e-paper once with the current opaque URL", asy
 
 test("keeps a stored order successful and retries a failed e-paper update", async () => {
   let attempts = 0;
-  const server = createServer({
+  const visitStore = createVisitStore();
+  const server = createCustomerServer({
+    visitStore,
     epaperClient: {
       updateTableInUse: async () => {
         attempts += 1;
@@ -299,12 +443,12 @@ test("keeps a stored order successful and retries a failed e-paper update", asyn
     }
   });
   const body = {
-    table_number: 4,
     items: [{ id: "crispy-gyoza", quantity: 1 }]
   };
+  const cookie = await enrollPhone(server, visitStore, 4);
 
-  const first = await server.inject("POST", "/api/orders", body);
-  const second = await server.inject("POST", "/api/orders", body);
+  const first = await server.inject("POST", "/api/orders", body, customerHeaders(cookie));
+  const second = await server.inject("POST", "/api/orders", body, customerHeaders(cookie));
 
   assert.equal(first.status, 201);
   assert.equal(second.status, 201);
@@ -435,7 +579,9 @@ test("provisioning rejects noncanonical table number segments", async () => {
 
 test("provisioning rejects active tables without updating the display or session", async () => {
   let welcomeUpdates = 0;
-  const server = createServer({
+  const visitStore = createVisitStore();
+  const server = createCustomerServer({
+    visitStore,
     tableDisplayApiKey: "display-secret",
     epaperClient: {
       updateTableInUse: async () => ({ ok: true }),
@@ -445,19 +591,19 @@ test("provisioning rejects active tables without updating the display or session
       }
     }
   });
+  const cookie = await enrollPhone(server, visitStore, 7);
 
   const order = await server.inject("POST", "/api/orders", {
-    table_number: 7,
     items: [{ id: "crispy-gyoza", quantity: 1 }]
-  });
-  const before = await server.inject("GET", "/api/session?table_number=7");
+  }, customerHeaders(cookie));
+  const before = await server.inject("GET", "/api/session", undefined, { cookie });
   const response = await server.inject(
     "POST",
     "/api/table-displays/7/welcome",
     undefined,
     { authorization: "Bearer display-secret" }
   );
-  const after = await server.inject("GET", "/api/session?table_number=7");
+  const after = await server.inject("GET", "/api/session", undefined, { cookie });
 
   assert.equal(order.status, 201);
   assert.equal(before.body.session.status, "Table is in use");
@@ -477,7 +623,9 @@ test("a concurrent first order leaves the table display in use after Welcome pro
     beginWelcome = resolve;
   });
   const displayUpdates = [];
-  const server = createServer({
+  const visitStore = createVisitStore();
+  const server = createCustomerServer({
+    visitStore,
     tableDisplayApiKey: "display-secret",
     epaperClient: {
       updateTableWelcome: async () => {
@@ -492,6 +640,7 @@ test("a concurrent first order leaves the table display in use after Welcome pro
       }
     }
   });
+  const cookie = await enrollPhone(server, visitStore, 7);
 
   const welcome = server.inject(
     "POST",
@@ -501,14 +650,13 @@ test("a concurrent first order leaves the table display in use after Welcome pro
   );
   await welcomeBegun;
   const order = server.inject("POST", "/api/orders", {
-    table_number: 7,
     items: [{ id: "crispy-gyoza", quantity: 1 }]
-  });
+  }, customerHeaders(cookie));
   await new Promise(setImmediate);
   releaseWelcome();
 
   const [welcomeResponse, orderResponse] = await Promise.all([welcome, order]);
-  const sessionResponse = await server.inject("GET", "/api/session?table_number=7");
+  const sessionResponse = await server.inject("GET", "/api/session", undefined, { cookie });
 
   assert.equal(welcomeResponse.status, 200);
   assert.equal(orderResponse.status, 201);
@@ -539,21 +687,24 @@ test("provisioning reports missing server display configuration", async () => {
 });
 
 test("provisioning maps SDK failures to 502 without changing the session", async () => {
-  const server = createServer({
+  const visitStore = createVisitStore();
+  const server = createCustomerServer({
+    visitStore,
     tableDisplayApiKey: "display-secret",
     epaperClient: displayClient(async () => {
       throw new Error("Bearer secret must not leak");
     })
   });
+  const cookie = await enrollPhone(server, visitStore, 7);
 
-  const before = await server.inject("GET", "/api/session?table_number=7");
+  const before = await server.inject("GET", "/api/session", undefined, { cookie });
   const response = await server.inject(
     "POST",
     "/api/table-displays/7/welcome",
     undefined,
     { authorization: "Bearer display-secret" }
   );
-  const after = await server.inject("GET", "/api/session?table_number=7");
+  const after = await server.inject("GET", "/api/session", undefined, { cookie });
 
   assert.equal(before.body.session.status, "Welcome");
   assert.equal(before.body.session.orders.length, 0);
