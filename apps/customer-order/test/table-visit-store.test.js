@@ -7,6 +7,11 @@ function deterministicRandom() {
   return (size) => Buffer.alloc(size, value++);
 }
 
+function queuedRandom(values) {
+  let index = 0;
+  return (size) => Buffer.alloc(size, values[Math.min(index++, values.length - 1)]);
+}
+
 test("creates twelve concise unique table visits without exposing secrets", () => {
   const store = createTableVisitStore({
     shopId: "1",
@@ -97,4 +102,44 @@ test("rejects invalid configuration, table IDs, and raw credentials", () => {
   assert.equal(store.enroll("too-short"), null);
   assert.equal(store.resolvePhoneSession("not-a-session"), null);
   assert.equal(store.completeRotation(7), null);
+});
+
+test("requires the production shop and ordering origin", () => {
+  assert.throws(() => createTableVisitStore({
+    shopId: "2",
+    orderBaseUrl: "https://order.yeyintlwin.com"
+  }), /shopId must be exactly \"1\"/);
+  assert.throws(() => createTableVisitStore({
+    shopId: "1",
+    orderBaseUrl: "https://order.example.test"
+  }), /orderBaseUrl origin must be https:\/\/order\.yeyintlwin\.com/);
+});
+
+test("retries duplicate table tokens and phone sessions", () => {
+  const randomValues = [0, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 99, 99, 100];
+  const store = createTableVisitStore({
+    shopId: "1",
+    orderBaseUrl: "https://order.yeyintlwin.com",
+    randomBytes: queuedRandom(randomValues)
+  });
+
+  const visits = store.createInitialVisits();
+  assert.equal(new Set(visits.map((visit) => visit.orderingUrl)).size, 12);
+
+  const token = store.getRawTokenForDisplay(7);
+  const first = store.enroll(token);
+  const second = store.enroll(token);
+  assert.notEqual(first.sessionId, second.sessionId);
+  assert.notEqual(store.resolvePhoneSession(first.sessionId), null);
+  assert.notEqual(store.resolvePhoneSession(second.sessionId), null);
+});
+
+test("fails safely when credential collisions never resolve", () => {
+  const store = createTableVisitStore({
+    shopId: "1",
+    orderBaseUrl: "https://order.yeyintlwin.com",
+    randomBytes: () => Buffer.alloc(16)
+  });
+
+  assert.throws(() => store.createInitialVisits(), /unique table token/);
 });

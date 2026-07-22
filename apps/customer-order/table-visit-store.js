@@ -4,6 +4,9 @@ const MAX_TABLE_NUMBER = 12;
 const JST_OFFSET_MS = 9 * 60 * 60 * 1000;
 const ROLLOVER_HOUR = 6;
 const CREDENTIAL_PATTERN = /^[A-Za-z0-9_-]{22}$/;
+const MAX_CREDENTIAL_ATTEMPTS = 10;
+const PRODUCTION_SHOP_ID = "1";
+const PRODUCTION_ORDER_ORIGIN = "https://order.yeyintlwin.com";
 
 function randomId(randomBytes) {
   return randomBytes(16).toString("base64url");
@@ -11,6 +14,15 @@ function randomId(randomBytes) {
 
 function digest(value) {
   return crypto.createHash("sha256").update(value).digest("hex");
+}
+
+function uniqueCredential(randomBytes, used, label) {
+  for (let attempt = 0; attempt < MAX_CREDENTIAL_ATTEMPTS; attempt += 1) {
+    const raw = randomId(randomBytes);
+    const hash = digest(raw);
+    if (!used.has(hash)) return { raw, hash };
+  }
+  throw new Error(`Unable to generate unique ${label}`);
 }
 
 function businessClock(instant) {
@@ -54,8 +66,8 @@ function snapshot(visit) {
 }
 
 function createTableVisitStore(options = {}) {
-  if (typeof options.shopId !== "string" || !/^[A-Za-z0-9_-]{1,64}$/.test(options.shopId)) {
-    throw new Error("shopId must be a concise identifier");
+  if (options.shopId !== PRODUCTION_SHOP_ID) {
+    throw new Error('shopId must be exactly "1"');
   }
 
   let baseUrl;
@@ -64,8 +76,8 @@ function createTableVisitStore(options = {}) {
   } catch {
     throw new Error("orderBaseUrl must be an https URL");
   }
-  if (baseUrl.protocol !== "https:" || !baseUrl.hostname || baseUrl.username || baseUrl.password || baseUrl.search || baseUrl.hash) {
-    throw new Error("orderBaseUrl must be an https URL");
+  if (baseUrl.origin !== PRODUCTION_ORDER_ORIGIN || baseUrl.username || baseUrl.password || baseUrl.search || baseUrl.hash) {
+    throw new Error(`orderBaseUrl origin must be ${PRODUCTION_ORDER_ORIGIN}`);
   }
 
   const now = options.now || (() => new Date());
@@ -90,16 +102,15 @@ function createTableVisitStore(options = {}) {
   }
 
   function createVisit(tableNumber, generation, status = "welcome") {
-    const rawToken = randomId(randomBytes);
-    const tokenHash = digest(rawToken);
+    const token = uniqueCredential(randomBytes, tokenVisits, "table token");
     const clock = businessClock(currentInstant());
     const visit = {
       shopId: options.shopId,
       businessDate: clock.businessDate,
       tableNumber,
       generation,
-      tokenHash,
-      orderingUrl: new URL(`/t/${rawToken}`, baseUrl).toString(),
+      tokenHash: token.hash,
+      orderingUrl: new URL(`/t/${token.raw}`, baseUrl).toString(),
       status,
       expiresAt: clock.expiresAt,
       slipNumber: null,
@@ -107,8 +118,8 @@ function createTableVisitStore(options = {}) {
       totals: { subtotal: 0, serviceFee: 0, tax: 0, total: 0 }
     };
     visits.set(tableNumber, visit);
-    tokenVisits.set(tokenHash, visit);
-    rawTokens.set(tableNumber, rawToken);
+    tokenVisits.set(token.hash, visit);
+    rawTokens.set(tableNumber, token.raw);
     return visit;
   }
 
@@ -144,9 +155,9 @@ function createTableVisitStore(options = {}) {
     if (typeof rawToken !== "string" || !CREDENTIAL_PATTERN.test(rawToken)) return null;
     const visit = tokenVisits.get(digest(rawToken));
     if (!isActive(visit)) return null;
-    const sessionId = randomId(randomBytes);
-    sessions.set(digest(sessionId), visit);
-    return { sessionId, visit: snapshot(visit) };
+    const session = uniqueCredential(randomBytes, sessions, "phone session");
+    sessions.set(session.hash, visit);
+    return { sessionId: session.raw, visit: snapshot(visit) };
   }
 
   function resolvePhoneSession(rawSession) {
