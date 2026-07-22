@@ -30,6 +30,8 @@ services:
       PORT: 3100
       EPAPER_HUB_URL: http://epaper-hub:3000
       ORDER_BASE_URL: https://order.yeyintlwin.com
+      BUSINESS_TIME_ZONE: Asia/Tokyo
+      BUSINESS_DAY_ROLLOVER_HOUR: 6
     depends_on:
       epaper-hub:
         condition: service_healthy

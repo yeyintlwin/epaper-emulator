@@ -3,10 +3,20 @@ const { EventEmitter } = require("node:events");
 const test = require("node:test");
 const { createOrderStore } = require("../order-store");
 const { createTableVisitStore } = require("../table-visit-store");
-const { createServer: createCustomerServer, initializeTableDisplays: initializeCustomerTableDisplays, start } = require("../server");
+const {
+  createServer: createCustomerServer,
+  initializeTableDisplays: initializeCustomerTableDisplays,
+  start: startCustomer
+} = require("../server");
 
 const ORDER_ORIGIN = "https://order.yeyintlwin.com";
 const CHECKOUT_API_KEY = "checkout-secret";
+const START_CONFIGURATION = {
+  shopId: "1",
+  checkoutApiKey: CHECKOUT_API_KEY,
+  businessTimeZone: "Asia/Tokyo",
+  businessDayRolloverHour: 6
+};
 
 function createVisitStore(options = {}) {
   const visitStore = createTableVisitStore({
@@ -24,6 +34,10 @@ function createServer(options = {}) {
 
 function initializeTableDisplays(options = {}) {
   return initializeCustomerTableDisplays({ visitStore: createVisitStore(), ...options });
+}
+
+function start(options = {}) {
+  return startCustomer({ ...START_CONFIGURATION, ...options });
 }
 
 async function enrollPhone(server, visitStore, tableNumber) {
@@ -251,6 +265,138 @@ test("startup renders twelve unique opaque Welcome URLs before listening", async
   assert.equal(listened, true);
 });
 
+test("rollover targets the next 06:00 Asia/Tokyo, invalidates sessions before display await, reschedules, and unreferences timers", async () => {
+  let now = new Date("2026-07-22T20:59:59.000Z");
+  const scheduled = [];
+  const scheduler = (callback, delay) => {
+    const timer = {
+      unrefCalls: 0,
+      unref() { timer.unrefCalls += 1; }
+    };
+    scheduled.push({ callback, delay, timer });
+    return timer;
+  };
+  let releaseDisplays;
+  const displaysHeld = new Promise((resolve) => { releaseDisplays = resolve; });
+  let rolloverStarted = false;
+  const rolloverUpdates = [];
+  const visitStore = createVisitStore({ now: () => now });
+  const store = createOrderStore({ now: () => now });
+  const server = await start({
+    now: () => now,
+    scheduler,
+    visitStore,
+    store,
+    listen: async () => {},
+    epaperClient: {
+      updateTableInUse: async () => ({ ok: true }),
+      async updateTableWelcome(tableNumber, orderingUrl) {
+        if (!rolloverStarted) return { ok: true };
+        rolloverUpdates.push({ tableNumber, orderingUrl });
+        await displaysHeld;
+        return { ok: true };
+      }
+    }
+  });
+  const oldToken = visitStore.getRawTokenForDisplay(7);
+  const firstCookie = await enrollPhone(server, visitStore, 7);
+  const secondCookie = await enrollPhone(server, visitStore, 7);
+  await server.inject("POST", "/api/orders", {
+    items: [{ id: "crispy-gyoza", quantity: 1 }]
+  }, customerHeaders(firstCookie));
+
+  assert.equal(scheduled.length, 1);
+  assert.equal(scheduled[0].delay, 1000);
+  assert.equal(scheduled[0].timer.unrefCalls, 1);
+
+  now = new Date("2026-07-22T21:00:00.000Z");
+  rolloverStarted = true;
+  const reconciling = scheduled[0].callback();
+  await new Promise(setImmediate);
+
+  assert.equal((await server.inject("GET", `/t/${oldToken}`)).status, 410);
+  assert.equal((await server.inject("GET", "/api/session", undefined, { cookie: firstCookie })).status, 401);
+  assert.equal((await server.inject("GET", "/api/session", undefined, { cookie: secondCookie })).status, 401);
+  assert.equal(store.getSession(7).slipNumber, null);
+  assert.equal(rolloverUpdates.length, 12);
+  assert.ok(Array.from({ length: 12 }, (_, index) => index + 1).every(
+    (tableNumber) => visitStore.getCurrentVisit(tableNumber).status === "pending_display"
+  ));
+
+  releaseDisplays();
+  await reconciling;
+
+  assert.deepEqual(rolloverUpdates.map(({ tableNumber }) => tableNumber).sort((a, b) => a - b),
+    Array.from({ length: 12 }, (_, index) => index + 1));
+  assert.equal(new Set(rolloverUpdates.map(({ orderingUrl }) => orderingUrl)).size, 12);
+  for (const { tableNumber, orderingUrl } of rolloverUpdates) {
+    const visit = visitStore.getCurrentVisit(tableNumber);
+    assert.equal(visit.generation, 2);
+    assert.equal(visit.status, "welcome");
+    assert.equal(orderingUrl, visit.orderingUrl);
+  }
+  assert.equal(scheduled.length, 2);
+  assert.equal(scheduled[1].delay, 24 * 60 * 60 * 1000);
+  assert.equal(scheduled[1].timer.unrefCalls, 1);
+});
+
+test("rollover isolates display failures and retries the same pending URL and generation", async () => {
+  let now = new Date("2026-07-22T20:59:59.000Z");
+  let rolloverStarted = false;
+  let tableSevenAttempts = 0;
+  const rolloverUpdates = [];
+  const visitStore = createVisitStore({ now: () => now });
+  const store = createOrderStore({ now: () => now });
+  const server = await start({
+    now: () => now,
+    scheduler: () => ({ unref() {} }),
+    visitStore,
+    store,
+    listen: async () => {},
+    epaperClient: {
+      updateTableInUse: async () => ({ ok: true }),
+      async updateTableWelcome(tableNumber, orderingUrl) {
+        if (!rolloverStarted) return { ok: true };
+        rolloverUpdates.push({ tableNumber, orderingUrl });
+        if (tableNumber === 7 && ++tableSevenAttempts === 1) throw new Error("table 7 offline");
+        return { ok: true };
+      }
+    }
+  });
+  const oldToken = visitStore.getRawTokenForDisplay(7);
+  const cookie = await enrollPhone(server, visitStore, 7);
+  await server.inject("POST", "/api/orders", {
+    items: [{ id: "crispy-gyoza", quantity: 1 }]
+  }, customerHeaders(cookie));
+
+  now = new Date("2026-07-22T21:00:00.000Z");
+  rolloverStarted = true;
+  await server.reconcileExpiredVisits();
+
+  const pending = visitStore.getCurrentVisit(7);
+  assert.equal((await server.inject("GET", `/t/${oldToken}`)).status, 410);
+  assert.equal((await server.inject("GET", "/api/session", undefined, { cookie })).status, 401);
+  assert.equal(store.getSession(7).slipNumber, null);
+  assert.equal(pending.status, "pending_display");
+  assert.equal(pending.generation, 2);
+  for (const tableNumber of Array.from({ length: 12 }, (_, index) => index + 1).filter((value) => value !== 7)) {
+    assert.equal(visitStore.getCurrentVisit(tableNumber).status, "welcome");
+    assert.equal(visitStore.getCurrentVisit(tableNumber).generation, 2);
+  }
+
+  await server.reconcileExpiredVisits();
+
+  const completed = visitStore.getCurrentVisit(7);
+  const tableSevenUrls = rolloverUpdates
+    .filter(({ tableNumber }) => tableNumber === 7)
+    .map(({ orderingUrl }) => orderingUrl);
+  assert.deepEqual(tableSevenUrls, [pending.orderingUrl, pending.orderingUrl]);
+  assert.equal(completed.status, "welcome");
+  assert.equal(completed.generation, pending.generation);
+  assert.equal(completed.orderingUrl, pending.orderingUrl);
+  assert.equal(rolloverUpdates.length, 13);
+});
+
 test("startup retries a transient 503 display failure", async () => {
   const attempts = new Map();
   const urls = [];
@@ -355,7 +501,11 @@ test("default startup rejects missing production configuration before updates or
     EPAPER_HUB_URL: "https://epaper-hub.example.test",
     EPAPER_API_KEY: "epaper-key",
     API_KEY: "hub-key",
-    ORDER_BASE_URL: "https://order.yeyintlwin.com"
+    ORDER_BASE_URL: "https://order.yeyintlwin.com",
+    SHOP_ID: "1",
+    CHECKOUT_API_KEY,
+    BUSINESS_TIME_ZONE: "Asia/Tokyo",
+    BUSINESS_DAY_ROLLOVER_HOUR: "6"
   };
   try {
     let fetchCalls = 0;
@@ -371,7 +521,7 @@ test("default startup rejects missing production configuration before updates or
       Object.assign(process.env, configuredEnvironment);
       for (const variable of missing) delete process.env[variable];
       let listened = false;
-      await assert.rejects(() => start({
+      await assert.rejects(() => startCustomer({
         server: {},
         listen: () => { listened = true; },
         attempts: 1,
@@ -382,6 +532,60 @@ test("default startup rejects missing production configuration before updates or
     assert.equal(fetchCalls, 0);
   } finally {
     globalThis.fetch = originalFetch;
+    for (const name of Object.keys(process.env)) delete process.env[name];
+    Object.assign(process.env, originalEnvironment);
+  }
+});
+
+test("startup rejects invalid business configuration before visits, displays, or listening", async () => {
+  const invalidConfigurations = [
+    [{ shopId: 1 }, /SHOP_ID/],
+    [{ shopId: "2" }, /SHOP_ID/],
+    [{ checkoutApiKey: "" }, /CHECKOUT_API_KEY/],
+    [{ businessTimeZone: "UTC" }, /BUSINESS_TIME_ZONE/],
+    [{ businessDayRolloverHour: 5 }, /BUSINESS_DAY_ROLLOVER_HOUR/],
+    [{ businessDayRolloverHour: 6.5 }, /BUSINESS_DAY_ROLLOVER_HOUR/]
+  ];
+
+  for (const [invalid, pattern] of invalidConfigurations) {
+    let visits = 0;
+    let displays = 0;
+    let listens = 0;
+    await assert.rejects(() => startCustomer({
+      ...START_CONFIGURATION,
+      ...invalid,
+      visitStore: { createInitialVisits: () => { visits += 1; } },
+      epaperClient: { updateTableWelcome: async () => { displays += 1; } },
+      server: {},
+      listen: async () => { listens += 1; }
+    }), pattern);
+    assert.equal(visits, 0);
+    assert.equal(displays, 0);
+    assert.equal(listens, 0);
+  }
+});
+
+test("startup reads the exact business configuration from the environment", async () => {
+  const originalEnvironment = { ...process.env };
+  try {
+    Object.assign(process.env, {
+      SHOP_ID: "1",
+      CHECKOUT_API_KEY,
+      BUSINESS_TIME_ZONE: "Asia/Tokyo",
+      BUSINESS_DAY_ROLLOVER_HOUR: "6"
+    });
+    let displays = 0;
+    let listened = false;
+
+    await startCustomer({
+      epaperClient: { updateTableWelcome: async () => { displays += 1; return { ok: true }; } },
+      scheduler: () => ({ unref() {} }),
+      listen: async () => { listened = true; }
+    });
+
+    assert.equal(displays, 12);
+    assert.equal(listened, true);
+  } finally {
     for (const name of Object.keys(process.env)) delete process.env[name];
     Object.assign(process.env, originalEnvironment);
   }

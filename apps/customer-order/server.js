@@ -8,6 +8,8 @@ const { createTableVisitStore } = require("./table-visit-store");
 
 const PUBLIC_ROOT = path.join(__dirname, "public");
 const DEFAULT_ORDER_BASE_URL = "https://order.yeyintlwin.com";
+const DAY_MS = 24 * 60 * 60 * 1000;
+const JST_OFFSET_MS = 9 * 60 * 60 * 1000;
 
 function createConfiguredEpaperClient(requireStartupConfiguration = false) {
   const hubUrl = process.env.EPAPER_HUB_URL;
@@ -30,6 +32,39 @@ function loadDotEnv(file = path.join(__dirname, ".env")) {
     if (!match || process.env[match[1]] !== undefined) continue;
     process.env[match[1]] = match[2].replace(/^["']|["']$/g, "");
   }
+}
+
+function startupConfiguration(options) {
+  const shopId = options.shopId ?? process.env.SHOP_ID;
+  const checkoutApiKey = options.checkoutApiKey ?? process.env.CHECKOUT_API_KEY;
+  const businessTimeZone = options.businessTimeZone ?? process.env.BUSINESS_TIME_ZONE;
+  const rolloverValue = options.businessDayRolloverHour ?? process.env.BUSINESS_DAY_ROLLOVER_HOUR;
+  const businessDayRolloverHour = rolloverValue === "6" ? 6 : rolloverValue;
+
+  if (shopId !== "1") throw new Error('SHOP_ID must be exactly "1"');
+  if (typeof checkoutApiKey !== "string" || checkoutApiKey.length === 0) {
+    throw new Error("CHECKOUT_API_KEY must be nonempty");
+  }
+  if (businessTimeZone !== "Asia/Tokyo") {
+    throw new Error('BUSINESS_TIME_ZONE must be exactly "Asia/Tokyo"');
+  }
+  if (!Number.isInteger(businessDayRolloverHour) || businessDayRolloverHour !== 6) {
+    throw new Error("BUSINESS_DAY_ROLLOVER_HOUR must be integer 6");
+  }
+  return { shopId, checkoutApiKey };
+}
+
+function millisecondsUntilNextRollover(now) {
+  const instant = new Date(now).getTime();
+  const tokyo = new Date(instant + JST_OFFSET_MS);
+  let rollover = Date.UTC(
+    tokyo.getUTCFullYear(),
+    tokyo.getUTCMonth(),
+    tokyo.getUTCDate(),
+    6
+  ) - JST_OFFSET_MS;
+  if (rollover <= instant) rollover += DAY_MS;
+  return rollover - instant;
 }
 
 function readBody(req) {
@@ -119,6 +154,7 @@ function createServer(options = {}) {
   const pendingEpaperTables = new Set();
   const tableDisplayUpdates = new Map();
   const checkoutOperations = new Map();
+  const failedRolloverTables = new Set();
   const checkoutApiKey = options.checkoutApiKey ?? process.env.CHECKOUT_API_KEY;
   const tableDisplayApiKey = options.tableDisplayApiKey ?? process.env.TABLE_DISPLAY_API_KEY;
   const epaperClient = options.epaperClient || createConfiguredEpaperClient();
@@ -141,6 +177,36 @@ function createServer(options = {}) {
     });
     checkoutOperations.set(tableNumber, shared);
     return shared;
+  }
+
+  async function rotateTableDisplay(tableNumber) {
+    const replacement = visitStore.beginRotation(tableNumber);
+    store.closeSession(tableNumber);
+    await epaperClient.updateTableWelcome(tableNumber, replacement.orderingUrl);
+    return visitStore.completeRotation(tableNumber);
+  }
+
+  async function reconcileExpiredVisits() {
+    const tableNumbers = [...new Set([
+      ...visitStore.expiredTableNumbers(),
+      ...failedRolloverTables
+    ])];
+    await Promise.all(tableNumbers.map(async (tableNumber) => {
+      try {
+        await runTableDisplayUpdate(tableNumber, async () => {
+          const current = visitStore.getCurrentVisit(tableNumber);
+          if (failedRolloverTables.has(tableNumber)) {
+            if (current?.status !== "pending_display") return;
+          } else if (!visitStore.expiredTableNumbers().includes(tableNumber)) {
+            return;
+          }
+          await rotateTableDisplay(tableNumber);
+        });
+        failedRolloverTables.delete(tableNumber);
+      } catch {
+        failedRolloverTables.add(tableNumber);
+      }
+    }));
   }
 
   async function handler(req, res) {
@@ -222,17 +288,10 @@ function createServer(options = {}) {
           return sendJson(res, 400, { error: `table number must be between 1 and ${MAX_TABLE_NUMBER}` });
         }
         const tableNumber = Number(checkoutRoute[1]);
-        const response = await runCheckout(tableNumber, async () => {
-          const replacement = visitStore.beginRotation(tableNumber);
-          store.closeSession(tableNumber);
-          try {
-            await epaperClient.updateTableWelcome(tableNumber, replacement.orderingUrl);
-            visitStore.completeRotation(tableNumber);
-            return { status: 200, body: { ok: true, tableNumber, status: "Welcome" } };
-          } catch {
-            return { status: 502, body: { error: "E-paper display update failed" } };
-          }
-        });
+        const response = await runCheckout(tableNumber, () => rotateTableDisplay(tableNumber)).then(
+          () => ({ status: 200, body: { ok: true, tableNumber, status: "Welcome" } }),
+          () => ({ status: 502, body: { error: "E-paper display update failed" } })
+        );
         return sendJson(res, response.status, response.body);
       }
 
@@ -326,6 +385,7 @@ function createServer(options = {}) {
       body: text ? JSON.parse(text) : null
     };
   };
+  server.reconcileExpiredVisits = reconcileExpiredVisits;
 
   return server;
 }
@@ -389,18 +449,38 @@ function listenServer(server, port) {
 }
 
 async function start(options = {}) {
+  const configuration = startupConfiguration(options);
   const epaperClient = options.epaperClient || createConfiguredEpaperClient(true);
   const visitStore = options.visitStore || createTableVisitStore({
-    shopId: "1",
-    orderBaseUrl: options.orderBaseUrl || process.env.ORDER_BASE_URL || DEFAULT_ORDER_BASE_URL
+    shopId: configuration.shopId,
+    orderBaseUrl: options.orderBaseUrl || process.env.ORDER_BASE_URL || DEFAULT_ORDER_BASE_URL,
+    now: options.now
   });
   visitStore.createInitialVisits();
-  const server = options.server || createServer({ ...options, epaperClient, visitStore });
+  const server = options.server || createServer({
+    ...options,
+    checkoutApiKey: configuration.checkoutApiKey,
+    epaperClient,
+    visitStore
+  });
   const port = options.port ?? Number(process.env.PORT || 3100);
   const listen = options.listen || listenServer;
 
   await initializeTableDisplays({ ...options, epaperClient, visitStore });
   await listen(server, port);
+  const scheduler = options.scheduler || setTimeout;
+  const now = options.now || (() => new Date());
+  const scheduleNextRollover = () => {
+    const timer = scheduler(async () => {
+      try {
+        await server.reconcileExpiredVisits();
+      } finally {
+        scheduleNextRollover();
+      }
+    }, millisecondsUntilNextRollover(now()));
+    if (typeof timer?.unref === "function") timer.unref();
+  };
+  scheduleNextRollover();
   return server;
 }
 

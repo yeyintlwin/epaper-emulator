@@ -36,10 +36,22 @@ test("Docker Compose starts customer ordering after a healthy e-paper hub", () =
   assert.match(compose, /127\.0\.0\.1:3100:3100/);
   assert.match(compose, /EPAPER_HUB_URL: http:\/\/epaper-hub:3000/);
   assert.match(compose, /ORDER_BASE_URL: https:\/\/order\.yeyintlwin\.com/);
+  assert.match(compose, /BUSINESS_TIME_ZONE: Asia\/Tokyo/);
+  assert.match(compose, /BUSINESS_DAY_ROLLOVER_HOUR: 6/);
+  assert.doesNotMatch(compose, /^\s+(?:SHOP_ID|CHECKOUT_API_KEY):/m);
   assert.match(compose, /condition: service_healthy/);
   assert.match(compose, /restart: unless-stopped/);
   assert.match(compose, /healthcheck:/);
   assert.match(compose, /wget.*http:\/\/localhost:3000\/health/);
+});
+
+test("customer environment example documents rollover configuration and server-only secrets", () => {
+  const environment = fs.readFileSync(path.join(repoRoot, "apps", "customer-order", ".env.example"), "utf8");
+
+  assert.match(environment, /^SHOP_ID=1$/m);
+  assert.match(environment, /^CHECKOUT_API_KEY=replace-with-independent-random-secret$/m);
+  assert.match(environment, /^BUSINESS_TIME_ZONE=Asia\/Tokyo$/m);
+  assert.match(environment, /^BUSINESS_DAY_ROLLOVER_HOUR=6$/m);
 });
 
 test("Customer order Docker image includes its local SDK runtime dependency", () => {
