@@ -1,32 +1,26 @@
 const { createEpaperHubSdk } = require("@restaurant/epaper-hub-sdk");
 
-function createEpaperClient({ hubUrl, apiKey, orderBaseUrl, fetchImpl = fetch } = {}) {
+function createEpaperClient({ hubUrl, apiKey, fetchImpl = fetch } = {}) {
   const normalizedHubUrl = String(hubUrl || "").replace(/\/$/, "");
   const token = String(apiKey || "");
   const sdk = normalizedHubUrl && token
     ? createEpaperHubSdk({ baseUrl: normalizedHubUrl, apiKey: token, fetchImpl })
     : null;
 
-  function orderingUrlFor(tableNumber) {
-    const orderingUrl = new URL(orderBaseUrl || "https://order.yeyintlwin.com");
-    orderingUrl.searchParams.set("table", tableNumber);
-    return orderingUrl.toString();
-  }
-
-  async function updateTableStatus(tableNumber, status) {
+  async function updateTableStatus(tableNumber, status, orderingUrl) {
     if (!sdk) return { skipped: true };
 
     return sdk.updateTableDisplay({
       epaperId: tableNumber,
       tableNumber,
       status,
-      url: orderingUrlFor(tableNumber)
+      url: orderingUrl
     });
   }
 
   return {
-    updateTableWelcome: (tableNumber) => updateTableStatus(tableNumber, "Welcome"),
-    updateTableInUse: (tableNumber) => updateTableStatus(tableNumber, "Table is in use")
+    updateTableWelcome: (tableNumber, orderingUrl) => updateTableStatus(tableNumber, "Welcome", orderingUrl),
+    updateTableInUse: (tableNumber, orderingUrl) => updateTableStatus(tableNumber, "Table is in use", orderingUrl)
   };
 }
 

@@ -4,6 +4,7 @@ const http = require("node:http");
 const path = require("node:path");
 const { createEpaperClient } = require("./epaper-client");
 const { createOrderStore, MAX_TABLE_NUMBER } = require("./order-store");
+const { createTableVisitStore } = require("./table-visit-store");
 
 const PUBLIC_ROOT = path.join(__dirname, "public");
 
@@ -93,6 +94,7 @@ function sendStatic(req, res) {
 
 function createServer(options = {}) {
   const store = options.store || createOrderStore({ now: options.now });
+  const visitStore = options.visitStore;
   const pendingEpaperTables = new Set();
   const tableDisplayUpdates = new Map();
   const tableDisplayApiKey = options.tableDisplayApiKey ?? process.env.TABLE_DISPLAY_API_KEY;
@@ -145,7 +147,7 @@ function createServer(options = {}) {
             return { status: 409, body: { error: "Table is in use" } };
           }
           try {
-            const result = await epaperClient.updateTableWelcome(tableNumber);
+            const result = await epaperClient.updateTableWelcome(tableNumber, visitStore.getOrderingUrl(tableNumber));
             if (result?.skipped) {
               return { status: 503, body: { error: "E-paper hub is not configured" } };
             }
@@ -168,7 +170,7 @@ function createServer(options = {}) {
         if (result.isFirstOrderForSession || pendingEpaperTables.has(tableNumber)) {
           try {
             epaperUpdate = await runTableDisplayUpdate(tableNumber, () => (
-              epaperClient.updateTableInUse(tableNumber, result.session)
+              epaperClient.updateTableInUse(tableNumber, visitStore.getOrderingUrl(tableNumber))
             ));
             pendingEpaperTables.delete(tableNumber);
           } catch (error) {
@@ -240,6 +242,7 @@ function createServer(options = {}) {
 
 async function initializeTableDisplays(options = {}) {
   const epaperClient = options.epaperClient;
+  const visitStore = options.visitStore;
   const attempts = options.attempts ?? 3;
   if (!Number.isInteger(attempts) || attempts < 1) {
     throw new Error("attempts must be a positive integer");
@@ -251,7 +254,7 @@ async function initializeTableDisplays(options = {}) {
     const tableNumber = index + 1;
     for (let attempt = 1; attempt <= attempts; attempt += 1) {
       try {
-        const result = await epaperClient.updateTableWelcome(tableNumber);
+        const result = await epaperClient.updateTableWelcome(tableNumber, visitStore.getOrderingUrl(tableNumber));
         if (result?.skipped) {
           const error = new Error("E-paper hub is not configured");
           error.code = "EPAPER_CONFIGURATION";
@@ -297,11 +300,16 @@ function listenServer(server, port) {
 
 async function start(options = {}) {
   const epaperClient = options.epaperClient || createConfiguredEpaperClient(true);
-  const server = options.server || createServer({ ...options, epaperClient });
+  const visitStore = options.visitStore || createTableVisitStore({
+    shopId: "1",
+    orderBaseUrl: options.orderBaseUrl || process.env.ORDER_BASE_URL || "https://order.yeyintlwin.com"
+  });
+  visitStore.createInitialVisits();
+  const server = options.server || createServer({ ...options, epaperClient, visitStore });
   const port = options.port ?? Number(process.env.PORT || 3100);
   const listen = options.listen || listenServer;
 
-  await initializeTableDisplays({ ...options, epaperClient });
+  await initializeTableDisplays({ ...options, epaperClient, visitStore });
   await listen(server, port);
   return server;
 }

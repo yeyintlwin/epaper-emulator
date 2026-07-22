@@ -51,6 +51,17 @@ test("renders QR modules at the largest supported one-pixel scale", () => {
   assert.ok(darkQrPixels > 100);
 });
 
+test("fits a production opaque table visit URL", () => {
+  const payload = renderTableDisplay({
+    tableNumber: 12,
+    status: "Table is in use",
+    url: "https://order.yeyintlwin.com/t/______________________"
+  });
+
+  assert.equal(payload.width, 296);
+  assert.equal(payload.height, 128);
+});
+
 test("validates table template input", () => {
   assert.throws(
     () => renderTableDisplay({ tableNumber: 0, status: "Welcome", url: "https://order.example.test" }),

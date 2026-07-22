@@ -1,7 +1,25 @@
 const assert = require("node:assert/strict");
 const { EventEmitter } = require("node:events");
 const test = require("node:test");
-const { createServer, initializeTableDisplays, start } = require("../server");
+const { createTableVisitStore } = require("../table-visit-store");
+const { createServer: createCustomerServer, initializeTableDisplays: initializeCustomerTableDisplays, start } = require("../server");
+
+function createVisitStore() {
+  const visitStore = createTableVisitStore({
+    shopId: "1",
+    orderBaseUrl: "https://order.yeyintlwin.com"
+  });
+  visitStore.createInitialVisits();
+  return visitStore;
+}
+
+function createServer(options = {}) {
+  return createCustomerServer({ visitStore: createVisitStore(), ...options });
+}
+
+function initializeTableDisplays(options = {}) {
+  return initializeCustomerTableDisplays({ visitStore: createVisitStore(), ...options });
+}
 
 function displayClient(updateTableWelcome) {
   return {
@@ -10,13 +28,13 @@ function displayClient(updateTableWelcome) {
   };
 }
 
-test("startup initializes all twelve Welcome displays before listening", async () => {
+test("startup renders twelve unique opaque Welcome URLs before listening", async () => {
   const updates = [];
   let listened = false;
   const pending = [];
   const epaperClient = {
-    updateTableWelcome(tableNumber) {
-      updates.push(tableNumber);
+    updateTableWelcome(tableNumber, orderingUrl) {
+      updates.push({ tableNumber, orderingUrl });
       return new Promise((resolve) => pending.push(resolve));
     }
   };
@@ -28,7 +46,9 @@ test("startup initializes all twelve Welcome displays before listening", async (
   });
   await new Promise(setImmediate);
 
-  assert.deepEqual(updates, Array.from({ length: 12 }, (_, index) => index + 1));
+  assert.deepEqual(updates.map(({ tableNumber }) => tableNumber), Array.from({ length: 12 }, (_, index) => index + 1));
+  assert.equal(new Set(updates.map(({ orderingUrl }) => orderingUrl)).size, 12);
+  assert.ok(updates.every(({ orderingUrl }) => /^https:\/\/order\.yeyintlwin\.com\/t\/[A-Za-z0-9_-]{22}$/.test(orderingUrl)));
   assert.equal(listened, false);
   pending.forEach((resolve) => resolve({ ok: true }));
   await starting;
@@ -37,12 +57,14 @@ test("startup initializes all twelve Welcome displays before listening", async (
 
 test("startup retries a transient 503 display failure", async () => {
   const attempts = new Map();
+  const urls = [];
   let sleeps = 0;
   await initializeTableDisplays({
     epaperClient: {
-      async updateTableWelcome(tableNumber) {
+      async updateTableWelcome(tableNumber, orderingUrl) {
         const count = (attempts.get(tableNumber) || 0) + 1;
         attempts.set(tableNumber, count);
+        if (tableNumber === 7) urls.push(orderingUrl);
         if (tableNumber === 7 && count === 1) throw new Error("E-paper hub update failed with 503");
         return { ok: true };
       }
@@ -54,6 +76,8 @@ test("startup retries a transient 503 display failure", async () => {
   assert.equal(attempts.get(7), 2);
   assert.equal([...attempts.values()].reduce((sum, count) => sum + count, 0), 13);
   assert.equal(sleeps, 1);
+  assert.equal(urls.length, 2);
+  assert.equal(urls[0], urls[1]);
 });
 
 test("startup does not retry a permanent 401 display failure", async () => {
@@ -135,7 +159,7 @@ test("default startup rejects missing production configuration before updates or
     EPAPER_HUB_URL: "https://epaper-hub.example.test",
     EPAPER_API_KEY: "epaper-key",
     API_KEY: "hub-key",
-    ORDER_BASE_URL: "https://order.example.test"
+    ORDER_BASE_URL: "https://order.yeyintlwin.com"
   };
   try {
     let fetchCalls = 0;
@@ -230,13 +254,15 @@ test("default startup listener rejects asynchronous errors", async () => {
   }), /address unavailable/);
 });
 
-test("placing first order updates e-paper once and keeps slip for later orders", async () => {
+test("placing first order updates e-paper once with the current opaque URL", async () => {
   const epaperUpdates = [];
-  const server = createServer({
+  const visitStore = createVisitStore();
+  const server = createCustomerServer({
     now: () => new Date("2026-07-19T10:00:00Z"),
+    visitStore,
     epaperClient: {
-      updateTableInUse: async (tableNumber, session) => {
-        epaperUpdates.push({ tableNumber, slipNumber: session.slipNumber });
+      updateTableInUse: async (tableNumber, orderingUrl) => {
+        epaperUpdates.push({ tableNumber, orderingUrl });
         return { ok: true };
       }
     }
@@ -254,7 +280,7 @@ test("placing first order updates e-paper once and keeps slip for later orders",
   assert.equal(first.status, 201);
   assert.equal(second.status, 201);
   assert.equal(first.body.session.slipNumber, second.body.session.slipNumber);
-  assert.deepEqual(epaperUpdates, [{ tableNumber: 4, slipNumber: first.body.session.slipNumber }]);
+  assert.deepEqual(epaperUpdates, [{ tableNumber: 4, orderingUrl: visitStore.getOrderingUrl(4) }]);
 });
 
 test("keeps a stored order successful and retries a failed e-paper update", async () => {
@@ -310,12 +336,15 @@ test("provisioning compares SHA-256 token digests with timingSafeEqual", () => {
   assert.match(source, /crypto\.timingSafeEqual\(supplied, configured\)/);
 });
 
-test("authorized provisioning displays the Welcome ordering QR", async () => {
+test("authorized provisioning preserves the current Welcome visit URL and generation", async () => {
   const updates = [];
-  const server = createServer({
+  const visitStore = createVisitStore();
+  const before = visitStore.getCurrentVisit(7);
+  const server = createCustomerServer({
     tableDisplayApiKey: "display-secret",
-    epaperClient: displayClient(async (tableNumber) => {
-      updates.push(tableNumber);
+    visitStore,
+    epaperClient: displayClient(async (tableNumber, orderingUrl) => {
+      updates.push({ tableNumber, orderingUrl });
       return { ok: true };
     })
   });
@@ -329,7 +358,8 @@ test("authorized provisioning displays the Welcome ordering QR", async () => {
 
   assert.equal(response.status, 200);
   assert.deepEqual(response.body, { ok: true, tableNumber: 7, status: "Welcome" });
-  assert.deepEqual(updates, [7]);
+  assert.deepEqual(updates, [{ tableNumber: 7, orderingUrl: before.orderingUrl }]);
+  assert.deepEqual(visitStore.getCurrentVisit(7), before);
 });
 
 test("provisioning rejects missing or incorrect authorization", async () => {
