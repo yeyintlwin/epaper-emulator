@@ -18,7 +18,7 @@ Restaurant ordering platform with table e-paper monitors, customer ordering, kit
 
 The first deployed service is the e-paper hub at `apps/epaper-hub`. It is deployed at `https://epaper-hub.yeyintlwin.com` and still uses the same GitHub Actions CI/CD pipeline.
 
-The customer ordering app has started at `apps/customer-order`. It runs locally now and is intended for `https://order.yeyintlwin.com`.
+The customer ordering app lives at `apps/customer-order` and is deployed at `https://order.yeyintlwin.com`.
 
 Run the current app locally:
 

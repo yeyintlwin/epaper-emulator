@@ -14,7 +14,7 @@
 - The ordering URL is built from `ORDER_BASE_URL` with the exact table number in the `table` query parameter.
 - `TABLE_DISPLAY_API_KEY`, `EPAPER_API_KEY`, and `API_KEY` remain server-side and never appear in `/api/config` or browser assets.
 - The provisioning endpoint uses a constant-time bearer-token comparison.
-- Server startup must not automatically reset displays to `Welcome`.
+- The later startup-readiness plan supersedes this original constraint: startup resets all 12 displays to `Welcome`; the manual endpoint still rejects active sessions during runtime.
 - Checkout continues to use its existing barcode.
 - Active sessions return `409`; no checkout or session-close API is added by this feature.
 - The e-paper hub API and `@restaurant/epaper-hub-sdk` public API remain unchanged.
@@ -430,7 +430,7 @@ curl -X POST "http://localhost:3100/api/table-displays/7/welcome" \
   -H "Authorization: Bearer $TABLE_DISPLAY_API_KEY"
 ```
 
-This securely uses the server-side e-paper SDK to display table 7, `Welcome`, and a QR for `${ORDER_BASE_URL}?table=7`. Run it when preparing an inactive table; server startup does not reset displays automatically. Active tables return `409` and are not reset by this endpoint.
+This securely uses the server-side e-paper SDK to display table 7, `Welcome`, and a QR for `${ORDER_BASE_URL}?table=7`. Run it when preparing an inactive table. The later startup-readiness plan resets all 12 displays on startup; active tables still return `409` from this manual endpoint during normal runtime.
 ````
 
 Add the same endpoint and production URL example to the root `README.md`, using `https://order.yeyintlwin.com` as `ORDER_BASE_URL`.

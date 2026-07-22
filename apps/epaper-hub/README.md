@@ -112,7 +112,7 @@ Older debug pixel payload:
 1. Install Docker and Docker Compose.
 2. Keep runtime config outside the deploy folder at `~/restaurant-order-system.env`.
 3. Keep only `~/restaurant-order-system/docker-compose.yml` on the server, plus `~/restaurant-order-system/config/` if needed later.
-4. Build and upload both images before running `docker compose up -d --no-build`; the current GitHub Actions update for the customer-order image is the next deployment task.
+4. GitHub Actions builds and uploads both immutable images, then runs `docker compose up -d --no-build` with both commit-tagged image names.
 5. The latest screen state is stored inside the Docker named volume `epaper-data`, not in the project folder.
 6. Open ports `80` and `443` in the Lightsail firewall.
 

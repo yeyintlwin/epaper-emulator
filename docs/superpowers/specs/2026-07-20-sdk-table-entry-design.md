@@ -19,7 +19,7 @@ Authorization: Bearer <TABLE_DISPLAY_API_KEY>
 
 The endpoint will validate the bearer credential and table number, reject active sessions with `409`, build the exact ordering URL from `ORDER_BASE_URL`, and call the existing e-paper SDK through the customer app's e-paper client. The server will never return or expose `TABLE_DISPLAY_API_KEY` or `EPAPER_API_KEY` to browser code.
 
-Automatic initialization during server startup is intentionally excluded because a restart must not reset occupied tables to `Welcome`.
+The later startup-readiness design supersedes the original startup exclusion: every customer-order startup now resets all 12 displays to `Welcome` before accepting traffic. The protected endpoint in this design still rejects active sessions during normal runtime.
 
 ## Components
 
@@ -67,7 +67,7 @@ The existing first-order flow will continue to call `updateTableInUse`, changing
 ## Configuration
 
 ```dotenv
-EPAPER_HUB_URL=https://epaper-hub.yeyintlwin.com
+EPAPER_HUB_URL=http://epaper-hub:3000
 EPAPER_API_KEY=replace-with-epaper-hub-api-key
 ORDER_BASE_URL=https://order.yeyintlwin.com
 TABLE_DISPLAY_API_KEY=replace-with-a-separate-long-random-secret

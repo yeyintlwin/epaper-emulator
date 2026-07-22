@@ -57,6 +57,24 @@ test("Customer order Docker image includes its local SDK runtime dependency", ()
   assert.match(dockerfile, /CMD \["node", "apps\/customer-order\/server\.js"\]/);
 });
 
+test("operations docs describe automatic twelve-table startup readiness", () => {
+  const rootReadme = fs.readFileSync(path.join(repoRoot, "README.md"), "utf8");
+  const customerReadme = fs.readFileSync(path.join(repoRoot, "apps", "customer-order", "README.md"), "utf8");
+  const hubReadme = fs.readFileSync(path.join(repoRoot, "apps", "epaper-hub", "README.md"), "utf8");
+  const sdkReadme = fs.readFileSync(path.join(repoRoot, "packages", "epaper-hub-sdk", "README.md"), "utf8");
+  const infraReadme = fs.readFileSync(path.join(repoRoot, "infra", "README.md"), "utf8");
+  const priorSpec = fs.readFileSync(path.join(repoRoot, "docs", "superpowers", "specs", "2026-07-20-sdk-table-entry-design.md"), "utf8");
+  const priorPlan = fs.readFileSync(path.join(repoRoot, "docs", "superpowers", "plans", "2026-07-20-sdk-table-entry.md"), "utf8");
+  const docs = [rootReadme, customerReadme, hubReadme, sdkReadme, infraReadme, priorSpec, priorPlan].join("\n");
+
+  assert.match(rootReadme, /resets all 12 displays.*before accepting traffic/i);
+  assert.match(customerReadme, /resets all 12 displays.*before accepting traffic/i);
+  assert.match(docs, /EPAPER_HUB_URL=http:\/\/epaper-hub:3000/);
+  assert.match(docs, /order\.yeyintlwin\.com/);
+  assert.match(docs, /127\.0\.0\.1:3100/);
+  assert.doesNotMatch(docs, /server startup does not reset displays|startup is intentionally excluded|must not automatically reset displays|next deployment task/i);
+});
+
 test("GitHub Actions deploys from GitHub-hosted runner over SSH", () => {
   const workflow = fs.readFileSync(
     path.join(repoRoot, ".github", "workflows", "deploy.yml"),

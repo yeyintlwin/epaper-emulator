@@ -14,11 +14,13 @@ npm start
 
 Open `http://localhost:3100/?table=1`.
 
+For direct local processes outside Docker, set `EPAPER_HUB_URL=http://localhost:3000`. Compose overrides it with the private service address shown below.
+
 ## Environment
 
 ```bash
 PORT=3100
-EPAPER_HUB_URL=https://epaper-hub.yeyintlwin.com
+EPAPER_HUB_URL=http://epaper-hub:3000
 ORDER_BASE_URL=https://order.yeyintlwin.com
 EPAPER_API_KEY=replace-with-epaper-hub-api-key
 TABLE_DISPLAY_API_KEY=replace-with-a-separate-long-random-secret
@@ -33,7 +35,7 @@ curl -X POST "http://localhost:3100/api/table-displays/7/welcome" \
   -H "Authorization: Bearer $TABLE_DISPLAY_API_KEY"
 ```
 
-This securely uses the server-side e-paper SDK to display table 7, `Welcome`, and a QR for `${ORDER_BASE_URL}?table=7`. Use it only to prepare an inactive table; server startup does not reset displays automatically. Active tables return `409` with `Table is in use` and are not reset by this endpoint. Session closure is outside this feature and will be owned by the future cashier checkout/session lifecycle.
+On every customer-order startup, the service resets all 12 displays to their `Welcome` ordering screens before accepting traffic. This deliberately replaces prior `Table is in use` display state in the current in-memory milestone. The protected endpoint above remains available for preparing one inactive table while the service is running; active sessions return `409` and are not reset by that endpoint.
 
 ## Current Flow
 
