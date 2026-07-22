@@ -67,7 +67,7 @@ curl -X POST "https://order.yeyintlwin.com/api/table-displays/7/welcome" \
   -H "Authorization: Bearer $TABLE_DISPLAY_API_KEY"
 ```
 
-This securely uses the server-side e-paper SDK to display table 7, `Welcome`, and a QR for `https://order.yeyintlwin.com/?table=7`. On every customer-order startup, the service resets all 12 displays to their `Welcome` ordering screens before accepting traffic. Use this endpoint only to prepare an inactive table while the service is running. Active tables return `409` with `Table is in use` and are not reset by this endpoint. Session closure is outside this feature and will be owned by the future cashier checkout/session lifecycle.
+This securely uses the server-side e-paper SDK to display table 7, `Welcome`, and a QR for `https://order.yeyintlwin.com/?table=7`. On every customer-order startup, the service resets all 12 displays to their `Welcome` ordering screens before accepting traffic. Use this endpoint only to prepare an inactive table while the service is running. Active tables return `409` with `Table is in use` and are not reset by this endpoint. The protected checkout operation closes the in-memory order session, revokes the table visit, and renders a fresh `Welcome` QR.
 
 Run tests from the repository root:
 
@@ -86,7 +86,7 @@ npm test
 7. The kitchen monitor receives the order with the table number.
 8. The kitchen printer prints a slip with table number, ordered items, slip number, and barcode.
 9. The first order creates the slip number. All later orders from the same table session keep that same slip number while the session remains active.
-10. Session closure will be owned by a future cashier checkout/session lifecycle; it is not available in the current in-memory order store.
+10. Protected checkout closes the current in-memory order session and rotates the table QR; cashier workflow integration remains future work.
 
 ## Management Requirements
 
@@ -100,5 +100,14 @@ The Lightsail server should keep only the runtime deployment files in `~/restaur
 - optional `config/`
 
 The environment file remains outside that folder at `~/restaurant-order-system.env`.
+
+Customer-order production startup requires these values. Keep `SHOP_ID` and `CHECKOUT_API_KEY` in the external production environment file; Compose supplies the two non-secret business-time defaults.
+
+```dotenv
+SHOP_ID=1
+CHECKOUT_API_KEY=<independent-random-secret>
+BUSINESS_TIME_ZONE=Asia/Tokyo
+BUSINESS_DAY_ROLLOVER_HOUR=6
+```
 
 Docker Compose runs `epaper-hub` and `customer-order` together. The hub and order ports bind only to `127.0.0.1`; Nginx owns public HTTPS. The order service waits for the hub health check, then connects to it privately at `http://epaper-hub:3000` while rendering public QR links for `https://order.yeyintlwin.com`.

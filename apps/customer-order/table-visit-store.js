@@ -182,7 +182,7 @@ function createTableVisitStore(options = {}) {
     const normalizedTable = normalizeTableNumber(tableNumber);
     const current = visits.get(normalizedTable);
     if (!current) return null;
-    if (current.status === "pending_display") return snapshot(current);
+    if (current.status === "pending_display" && !isExpired(current)) return snapshot(current);
 
     revokeVisitCredentials(current);
     current.status = "closed";
@@ -193,14 +193,14 @@ function createTableVisitStore(options = {}) {
 
   function completeRotation(tableNumber) {
     const visit = visits.get(normalizeTableNumber(tableNumber));
-    if (!visit || visit.status !== "pending_display") return null;
+    if (!visit || visit.status !== "pending_display" || isExpired(visit)) return null;
     visit.status = "welcome";
     return snapshot(visit);
   }
 
   function expiredTableNumbers() {
     return [...visits.values()]
-      .filter((visit) => (visit.status === "welcome" || visit.status === "in_use") && isExpired(visit))
+      .filter((visit) => ["welcome", "in_use", "pending_display"].includes(visit.status) && isExpired(visit))
       .map((visit) => visit.tableNumber)
       .sort((left, right) => left - right);
   }

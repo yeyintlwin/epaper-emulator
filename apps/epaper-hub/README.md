@@ -28,6 +28,15 @@ EPAPER_ENV_FILE=/path/to/restaurant-order-system.env \
 
 Compose starts the customer-order service after `/health` reports that the e-paper hub is ready. Customer ordering uses the private Docker URL `http://epaper-hub:3000`, publishes `127.0.0.1:3100`, and resets all 12 display screens before accepting traffic. Latest e-paper screen state is persisted in the Docker named volume `epaper-data`, so browser refreshes and container restarts keep the last update.
 
+Customer-order startup requires the following production values. Keep `SHOP_ID` and `CHECKOUT_API_KEY` in the external runtime environment file passed through `EPAPER_ENV_FILE`; Compose supplies only the two non-secret business-time defaults.
+
+```dotenv
+SHOP_ID=1
+CHECKOUT_API_KEY=<independent-random-secret>
+BUSINESS_TIME_ZONE=Asia/Tokyo
+BUSINESS_DAY_ROLLOVER_HOUR=6
+```
+
 ## Secure Update API
 
 Open `/api/docs` in the running app for the endpoint reference.

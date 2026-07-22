@@ -153,7 +153,7 @@ function createServer(options = {}) {
   const orderOrigin = new URL(options.orderBaseUrl || process.env.ORDER_BASE_URL || DEFAULT_ORDER_BASE_URL).origin;
   const pendingEpaperTables = new Set();
   const tableDisplayUpdates = new Map();
-  const checkoutOperations = new Map();
+  const rotationOperations = new Map();
   const failedRolloverTables = new Set();
   const checkoutApiKey = options.checkoutApiKey ?? process.env.CHECKOUT_API_KEY;
   const tableDisplayApiKey = options.tableDisplayApiKey ?? process.env.TABLE_DISPLAY_API_KEY;
@@ -168,14 +168,14 @@ function createServer(options = {}) {
     });
   }
 
-  function runCheckout(tableNumber, checkout) {
-    const inFlight = checkoutOperations.get(tableNumber);
+  function runTableRotation(tableNumber, rotation) {
+    const inFlight = rotationOperations.get(tableNumber);
     if (inFlight) return inFlight;
-    const operation = runTableDisplayUpdate(tableNumber, checkout);
+    const operation = runTableDisplayUpdate(tableNumber, rotation);
     const shared = operation.finally(() => {
-      if (checkoutOperations.get(tableNumber) === shared) checkoutOperations.delete(tableNumber);
+      if (rotationOperations.get(tableNumber) === shared) rotationOperations.delete(tableNumber);
     });
-    checkoutOperations.set(tableNumber, shared);
+    rotationOperations.set(tableNumber, shared);
     return shared;
   }
 
@@ -193,7 +193,7 @@ function createServer(options = {}) {
     ])];
     await Promise.all(tableNumbers.map(async (tableNumber) => {
       try {
-        await runTableDisplayUpdate(tableNumber, async () => {
+        await runTableRotation(tableNumber, async () => {
           const current = visitStore.getCurrentVisit(tableNumber);
           if (failedRolloverTables.has(tableNumber)) {
             if (current?.status !== "pending_display") return;
@@ -288,7 +288,7 @@ function createServer(options = {}) {
           return sendJson(res, 400, { error: `table number must be between 1 and ${MAX_TABLE_NUMBER}` });
         }
         const tableNumber = Number(checkoutRoute[1]);
-        const response = await runCheckout(tableNumber, () => rotateTableDisplay(tableNumber)).then(
+        const response = await runTableRotation(tableNumber, () => rotateTableDisplay(tableNumber)).then(
           () => ({ status: 200, body: { ok: true, tableNumber, status: "Welcome" } }),
           () => ({ status: 502, body: { error: "E-paper display update failed" } })
         );
@@ -470,10 +470,15 @@ async function start(options = {}) {
   await listen(server, port);
   const scheduler = options.scheduler || setTimeout;
   const now = options.now || (() => new Date());
+  const reportRolloverError = options.reportRolloverError || console.error;
   const scheduleNextRollover = () => {
     const timer = scheduler(async () => {
       try {
         await server.reconcileExpiredVisits();
+      } catch {
+        try {
+          reportRolloverError("Business-day rollover reconciliation failed");
+        } catch {}
       } finally {
         scheduleNextRollover();
       }

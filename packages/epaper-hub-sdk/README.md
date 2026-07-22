@@ -45,3 +45,12 @@ The returned object can be posted directly to `/api/epapers/:id`. Keep the API k
 ## Docker Runtime
 
 The customer-order container uses this SDK through the private Compose address `http://epaper-hub:3000`, not the public e-paper hub URL. Its startup bootstrap uses the same server-side client to reset tables 1 through 12 to `Welcome` before customer traffic is accepted. Keep `EPAPER_API_KEY` (or the hub's `API_KEY` fallback) only in the external runtime environment file.
+
+The same external runtime environment file must provide the customer-order production values below. Compose supplies the non-secret timezone and rollover defaults, while `SHOP_ID` and `CHECKOUT_API_KEY` remain in that file.
+
+```dotenv
+SHOP_ID=1
+CHECKOUT_API_KEY=<independent-random-secret>
+BUSINESS_TIME_ZONE=Asia/Tokyo
+BUSINESS_DAY_ROLLOVER_HOUR=6
+```

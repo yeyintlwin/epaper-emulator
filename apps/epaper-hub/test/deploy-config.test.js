@@ -87,6 +87,30 @@ test("operations docs describe automatic twelve-table startup readiness", () => 
   assert.doesNotMatch(docs, /server startup does not reset displays|startup is intentionally excluded|must not automatically reset displays|next deployment task/i);
 });
 
+test("deployment docs list required customer runtime values in the external environment file", () => {
+  const paths = [
+    path.join(repoRoot, "README.md"),
+    path.join(repoRoot, "apps", "epaper-hub", "README.md"),
+    path.join(repoRoot, "apps", "customer-order", "README.md"),
+    path.join(repoRoot, "packages", "epaper-hub-sdk", "README.md")
+  ];
+
+  for (const file of paths) {
+    const document = fs.readFileSync(file, "utf8");
+    assert.match(document, /SHOP_ID=1/, file);
+    assert.match(document, /CHECKOUT_API_KEY=(?:<independent-random-secret>|replace-with-independent-random-secret)/, file);
+    assert.match(document, /BUSINESS_TIME_ZONE=Asia\/Tokyo/, file);
+    assert.match(document, /BUSINESS_DAY_ROLLOVER_HOUR=6/, file);
+    assert.match(document, /external (?:production |runtime )?environment file/i, file);
+  }
+
+  const lifecycleDocs = [
+    fs.readFileSync(path.join(repoRoot, "README.md"), "utf8"),
+    fs.readFileSync(path.join(repoRoot, "apps", "customer-order", "README.md"), "utf8")
+  ].join("\n");
+  assert.doesNotMatch(lifecycleDocs, /session closure (?:is outside|will be owned)|does not yet close active sessions|not available in the current in-memory order store/i);
+});
+
 test("GitHub Actions deploys from GitHub-hosted runner over SSH", () => {
   const workflow = fs.readFileSync(
     path.join(repoRoot, ".github", "workflows", "deploy.yml"),

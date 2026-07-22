@@ -397,6 +397,126 @@ test("rollover isolates display failures and retries the same pending URL and ge
   assert.equal(rolloverUpdates.length, 13);
 });
 
+test("rollover replaces a checkout replacement that expired while its display update was failed", async () => {
+  let now = new Date("2026-07-22T20:59:00.000Z");
+  const tableSevenUrls = [];
+  let failCheckoutDisplay = true;
+  const visitStore = createVisitStore({ now: () => now });
+  const server = createCustomerServer({
+    checkoutApiKey: CHECKOUT_API_KEY,
+    now: () => now,
+    visitStore,
+    epaperClient: displayClient(async (tableNumber, orderingUrl) => {
+      if (tableNumber === 7) tableSevenUrls.push(orderingUrl);
+      if (tableNumber === 7 && failCheckoutDisplay) throw new Error("display offline");
+      return { ok: true };
+    })
+  });
+
+  const checkout = await server.inject(
+    "POST",
+    "/api/tables/7/checkout",
+    undefined,
+    { authorization: `Bearer ${CHECKOUT_API_KEY}` }
+  );
+  const expiredPending = visitStore.getCurrentVisit(7);
+
+  assert.equal(checkout.status, 502);
+  assert.equal(expiredPending.status, "pending_display");
+  assert.equal(expiredPending.generation, 2);
+
+  now = new Date("2026-07-22T21:00:00.000Z");
+  failCheckoutDisplay = false;
+  await server.reconcileExpiredVisits();
+
+  const replacement = visitStore.getCurrentVisit(7);
+  assert.equal(replacement.status, "welcome");
+  assert.equal(replacement.generation, expiredPending.generation + 1);
+  assert.notEqual(replacement.orderingUrl, expiredPending.orderingUrl);
+  assert.deepEqual(tableSevenUrls, [expiredPending.orderingUrl, replacement.orderingUrl]);
+});
+
+test("rollover and a racing checkout share one blocked table rotation", async () => {
+  let now = new Date("2026-07-22T20:59:59.000Z");
+  let releaseDisplay;
+  const displayHeld = new Promise((resolve) => { releaseDisplay = resolve; });
+  let displayStarted;
+  const displayBegun = new Promise((resolve) => { displayStarted = resolve; });
+  const tableSevenUrls = [];
+  const visitStore = createVisitStore({ now: () => now });
+  const before = visitStore.getCurrentVisit(7);
+  const server = createCustomerServer({
+    checkoutApiKey: CHECKOUT_API_KEY,
+    now: () => now,
+    visitStore,
+    epaperClient: displayClient(async (tableNumber, orderingUrl) => {
+      if (tableNumber === 7) {
+        tableSevenUrls.push(orderingUrl);
+        displayStarted();
+        await displayHeld;
+      }
+      return { ok: true };
+    })
+  });
+
+  now = new Date("2026-07-22T21:00:00.000Z");
+  const rollover = server.reconcileExpiredVisits();
+  await displayBegun;
+  const pending = visitStore.getCurrentVisit(7);
+  const pendingToken = visitStore.getRawTokenForDisplay(7);
+  const checkout = server.inject(
+    "POST",
+    "/api/tables/7/checkout",
+    undefined,
+    { authorization: `Bearer ${CHECKOUT_API_KEY}` }
+  );
+  await new Promise(setImmediate);
+
+  assert.deepEqual(tableSevenUrls, [pending.orderingUrl]);
+  assert.equal(pending.generation, before.generation + 1);
+
+  releaseDisplay();
+  const [, checkoutResponse] = await Promise.all([rollover, checkout]);
+  const completed = visitStore.getCurrentVisit(7);
+
+  assert.equal(checkoutResponse.status, 200);
+  assert.deepEqual(checkoutResponse.body, { ok: true, tableNumber: 7, status: "Welcome" });
+  assert.deepEqual(tableSevenUrls, [pending.orderingUrl]);
+  assert.equal(completed.generation, pending.generation);
+  assert.equal(completed.orderingUrl, pending.orderingUrl);
+  assert.equal(visitStore.getRawTokenForDisplay(7), pendingToken);
+  assert.equal(completed.status, "welcome");
+});
+
+test("rollover scheduler contains unexpected reconciliation rejection and reschedules", async () => {
+  let now = new Date("2026-07-22T20:59:59.000Z");
+  const scheduled = [];
+  const reported = [];
+  const visitStore = createVisitStore({ now: () => now });
+  await start({
+    now: () => now,
+    visitStore,
+    scheduler(callback, delay) {
+      scheduled.push({ callback, delay });
+      return { unref() {} };
+    },
+    reportRolloverError: (message) => { reported.push(message); },
+    listen: async () => {},
+    epaperClient: { updateTableWelcome: async () => ({ ok: true }) }
+  });
+  visitStore.expiredTableNumbers = () => {
+    throw new Error("Bearer raw-secret must never be reported");
+  };
+  now = new Date("2026-07-22T21:00:00.000Z");
+
+  const [result] = await Promise.allSettled([scheduled[0].callback()]);
+
+  assert.equal(result.status, "fulfilled");
+  assert.deepEqual(reported, ["Business-day rollover reconciliation failed"]);
+  assert.equal(scheduled.length, 2);
+  assert.equal(scheduled[1].delay, 24 * 60 * 60 * 1000);
+});
+
 test("startup retries a transient 503 display failure", async () => {
   const attempts = new Map();
   const urls = [];

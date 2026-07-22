@@ -86,6 +86,36 @@ test("expires visits at the Tokyo six o'clock rollover and completes one pending
   assert.equal(store.getCurrentVisit(7).orderingUrl, pending.orderingUrl);
 });
 
+test("replaces an expired pending display while preserving same-day retry identity", () => {
+  let current = new Date("2026-07-22T20:59:00.000Z");
+  const store = createTableVisitStore({
+    shopId: "1",
+    orderBaseUrl: "https://order.yeyintlwin.com",
+    now: () => current,
+    randomBytes: deterministicRandom()
+  });
+  store.createInitialVisits();
+
+  const pending = store.beginRotation(7);
+  const pendingToken = store.getRawTokenForDisplay(7);
+  const sameDayRetry = store.beginRotation(7);
+
+  assert.equal(sameDayRetry.generation, pending.generation);
+  assert.equal(sameDayRetry.orderingUrl, pending.orderingUrl);
+  assert.equal(store.getRawTokenForDisplay(7), pendingToken);
+
+  current = new Date("2026-07-22T21:00:00.000Z");
+  assert.equal(store.expiredTableNumbers().includes(7), true);
+  assert.equal(store.completeRotation(7), null);
+
+  const replacement = store.beginRotation(7);
+  assert.equal(replacement.generation, pending.generation + 1);
+  assert.notEqual(replacement.orderingUrl, pending.orderingUrl);
+  assert.notEqual(store.getRawTokenForDisplay(7), pendingToken);
+  assert.equal(replacement.status, "pending_display");
+  assert.equal(store.completeRotation(7).orderingUrl, replacement.orderingUrl);
+});
+
 test("rejects invalid configuration, table IDs, and raw credentials", () => {
   assert.throws(() => createTableVisitStore({ shopId: "", orderBaseUrl: "https://order.example.test" }), /shopId/);
   assert.throws(() => createTableVisitStore({ shopId: "1", orderBaseUrl: "http://order.example.test" }), /https/);

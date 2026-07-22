@@ -22,11 +22,15 @@ For direct local processes outside Docker, set `EPAPER_HUB_URL=http://localhost:
 PORT=3100
 EPAPER_HUB_URL=http://epaper-hub:3000
 ORDER_BASE_URL=https://order.yeyintlwin.com
+SHOP_ID=1
+CHECKOUT_API_KEY=<independent-random-secret>
+BUSINESS_TIME_ZONE=Asia/Tokyo
+BUSINESS_DAY_ROLLOVER_HOUR=6
 EPAPER_API_KEY=replace-with-epaper-hub-api-key
 TABLE_DISPLAY_API_KEY=replace-with-a-separate-long-random-secret
 ```
 
-`TABLE_DISPLAY_API_KEY`, `EPAPER_API_KEY`, and the `API_KEY` fallback are server-only credentials and are never exposed to browser code. `ORDER_BASE_URL` is the public page encoded into each table QR code.
+`CHECKOUT_API_KEY`, `TABLE_DISPLAY_API_KEY`, `EPAPER_API_KEY`, and the `API_KEY` fallback are server-only credentials and are never exposed to browser code. `ORDER_BASE_URL` is the public page encoded into each table QR code. Production deployment reads `SHOP_ID` and `CHECKOUT_API_KEY` from the external runtime environment file at `~/restaurant-order-system.env`; Compose supplies the exact `BUSINESS_TIME_ZONE` and `BUSINESS_DAY_ROLLOVER_HOUR` defaults.
 
 ## Initialize A Table Display
 
@@ -48,4 +52,4 @@ On every customer-order startup, the service resets all 12 displays to their `We
 7. First order securely updates the e-paper hub status to `Table is in use`.
 8. Customer can call staff.
 9. Checkout preview shows subtotal, service fee, tax, total, bill split, and a checkout barcode.
-10. This app's in-memory order store does not yet close active sessions; that future cashier checkout/session lifecycle will own session closure.
+10. Protected checkout closes the active in-memory order session, revokes enrolled phones, and rotates the table QR; cashier UI integration remains future work.
