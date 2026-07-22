@@ -49,5 +49,5 @@ test("mobile customer UI uses native-style bottom navigation and a menu category
   assert.match(js, /classList\.add\("rescanRequired"\)/);
   assert.match(js, /response\.status === 401 \|\| response\.status === 410/);
   assert.doesNotMatch(js, /getTableNumber|table_number|api\(`\/api\/session\?/);
-  assert.doesNotMatch(js, /EPAPER_API_KEY|TABLE_DISPLAY_API_KEY|API_KEY|Bearer/);
+  assert.doesNotMatch(`${html}\n${css}\n${js}`, /EPAPER_API_KEY|TABLE_DISPLAY_API_KEY|CHECKOUT_API_KEY|API_KEY|Bearer/);
 });

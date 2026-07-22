@@ -43,6 +43,20 @@ test("order totals include tax and service fee breakdown", () => {
   });
 });
 
+test("checkout returns the final session and resets the table order state", () => {
+  const store = createOrderStore({ now: () => new Date("2026-07-22T03:00:00Z") });
+  const placed = store.placeOrder({
+    tableNumber: 7,
+    items: [{ id: "crispy-gyoza", quantity: 1 }]
+  });
+
+  const closed = store.closeSession(7);
+
+  assert.equal(closed.slipNumber, placed.session.slipNumber);
+  assert.equal(closed.status, "Table is in use");
+  assert.equal(store.getSession(7).slipNumber, null);
+});
+
 test("invalid table and menu item requests are rejected", () => {
   const store = createOrderStore();
 

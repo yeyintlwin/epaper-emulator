@@ -118,6 +118,7 @@ function createServer(options = {}) {
   const orderOrigin = new URL(options.orderBaseUrl || process.env.ORDER_BASE_URL || DEFAULT_ORDER_BASE_URL).origin;
   const pendingEpaperTables = new Set();
   const tableDisplayUpdates = new Map();
+  const checkoutApiKey = options.checkoutApiKey ?? process.env.CHECKOUT_API_KEY;
   const tableDisplayApiKey = options.tableDisplayApiKey ?? process.env.TABLE_DISPLAY_API_KEY;
   const epaperClient = options.epaperClient || createConfiguredEpaperClient();
 
@@ -200,33 +201,59 @@ function createServer(options = {}) {
         return sendJson(res, response.status, response.body);
       }
 
+      const checkoutRoute = url.pathname.match(/^\/api\/tables\/([^/]+)\/checkout$/);
+      if (req.method === "POST" && checkoutRoute) {
+        if (!checkoutApiKey) {
+          return sendJson(res, 503, { error: "Checkout is not configured" });
+        }
+        if (!bearerMatches(req.headers.authorization, checkoutApiKey)) {
+          return sendJson(res, 401, { error: "Unauthorized" });
+        }
+        if (!/^(?:[1-9]|1[0-2])$/.test(checkoutRoute[1])) {
+          return sendJson(res, 400, { error: `table number must be between 1 and ${MAX_TABLE_NUMBER}` });
+        }
+        const tableNumber = Number(checkoutRoute[1]);
+        const response = await runTableDisplayUpdate(tableNumber, async () => {
+          const replacement = visitStore.beginRotation(tableNumber);
+          store.closeSession(tableNumber);
+          try {
+            await epaperClient.updateTableWelcome(tableNumber, replacement.orderingUrl);
+            visitStore.completeRotation(tableNumber);
+            return { status: 200, body: { ok: true, tableNumber, status: "Welcome" } };
+          } catch {
+            return { status: 502, body: { error: "E-paper display update failed" } };
+          }
+        });
+        return sendJson(res, response.status, response.body);
+      }
+
       if (req.method === "POST" && url.pathname === "/api/orders") {
-        let visit = authorizedVisit(req, visitStore);
+        const visit = authorizedVisit(req, visitStore);
         if (!visit) return sendJson(res, 401, { error: "Scan the current table QR to continue" });
         if (req.headers.origin !== orderOrigin) return sendJson(res, 403, { error: "Forbidden" });
         if (!acceptsJson(req)) return sendJson(res, 415, { error: "Content-Type must be application/json" });
         const body = await readBody(req);
-        visit = authorizedVisit(req, visitStore);
-        if (!visit) return sendJson(res, 401, { error: "Scan the current table QR to continue" });
-        const result = store.placeOrder({
-          tableNumber: visit.tableNumber,
-          items: body.items
-        });
-        visitStore.markInUse(visit.tableNumber);
         const tableNumber = visit.tableNumber;
-        let epaperUpdate = { ok: true };
-        if (result.isFirstOrderForSession || pendingEpaperTables.has(tableNumber)) {
-          try {
-            epaperUpdate = await runTableDisplayUpdate(tableNumber, () => (
-              epaperClient.updateTableInUse(tableNumber, visitStore.getOrderingUrl(visit.tableNumber))
-            ));
-            pendingEpaperTables.delete(tableNumber);
-          } catch {
-            pendingEpaperTables.add(tableNumber);
-            epaperUpdate = { ok: false, pending: true, error: "E-paper display update failed" };
+        const response = await runTableDisplayUpdate(tableNumber, async () => {
+          const currentVisit = authorizedVisit(req, visitStore);
+          if (!currentVisit || currentVisit.tableNumber !== tableNumber) {
+            return { status: 401, body: { error: "Scan the current table QR to continue" } };
           }
-        }
-        return sendJson(res, 201, { ...result, epaperUpdate });
+          const result = store.placeOrder({ tableNumber, items: body.items });
+          visitStore.markInUse(tableNumber);
+          let epaperUpdate = { ok: true };
+          if (result.isFirstOrderForSession || pendingEpaperTables.has(tableNumber)) {
+            try {
+              epaperUpdate = await epaperClient.updateTableInUse(tableNumber, visitStore.getOrderingUrl(tableNumber));
+              pendingEpaperTables.delete(tableNumber);
+            } catch {
+              pendingEpaperTables.add(tableNumber);
+              epaperUpdate = { ok: false, pending: true, error: "E-paper display update failed" };
+            }
+          }
+          return { status: 201, body: { ...result, epaperUpdate } };
+        });
+        return sendJson(res, response.status, response.body);
       }
 
       if (req.method === "POST" && url.pathname === "/api/staff-calls") {

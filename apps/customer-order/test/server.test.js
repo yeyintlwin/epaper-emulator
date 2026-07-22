@@ -1,10 +1,12 @@
 const assert = require("node:assert/strict");
 const { EventEmitter } = require("node:events");
 const test = require("node:test");
+const { createOrderStore } = require("../order-store");
 const { createTableVisitStore } = require("../table-visit-store");
 const { createServer: createCustomerServer, initializeTableDisplays: initializeCustomerTableDisplays, start } = require("../server");
 
 const ORDER_ORIGIN = "https://order.yeyintlwin.com";
+const CHECKOUT_API_KEY = "checkout-secret";
 
 function createVisitStore(options = {}) {
   const visitStore = createTableVisitStore({
@@ -533,6 +535,7 @@ test("does not expose e-paper client failure details in an order response", asyn
 
 test("frontend config endpoint does not expose e-paper or display secrets", async () => {
   const server = createServer({
+    checkoutApiKey: CHECKOUT_API_KEY,
     tableDisplayApiKey: "display-secret",
     epaperClient: { updateTableInUse: async () => ({ ok: true }) }
   });
@@ -542,8 +545,251 @@ test("frontend config endpoint does not expose e-paper or display secrets", asyn
   assert.equal(response.status, 200);
   assert.equal(response.body.epaperApiKey, undefined);
   assert.equal(response.body.tableDisplayApiKey, undefined);
+  assert.equal(response.body.checkoutApiKey, undefined);
   assert.equal(response.body.apiKey, undefined);
   assert.equal(response.body.maxTableNumber, 12);
+});
+
+test("checkout rejects missing and same-length incorrect bearer authorization", async () => {
+  let updates = 0;
+  const server = createServer({
+    checkoutApiKey: CHECKOUT_API_KEY,
+    epaperClient: displayClient(async () => {
+      updates += 1;
+      return { ok: true };
+    })
+  });
+  const incorrectKey = "checkout-secreT";
+  assert.equal(incorrectKey.length, CHECKOUT_API_KEY.length);
+
+  const missing = await server.inject("POST", "/api/tables/7/checkout");
+  const incorrect = await server.inject(
+    "POST",
+    "/api/tables/7/checkout",
+    undefined,
+    { authorization: `Bearer ${incorrectKey}` }
+  );
+
+  assert.equal(missing.status, 401);
+  assert.equal(incorrect.status, 401);
+  assert.equal(updates, 0);
+});
+
+test("checkout rejects noncanonical table number segments", async () => {
+  let updates = 0;
+  const server = createServer({
+    checkoutApiKey: CHECKOUT_API_KEY,
+    epaperClient: displayClient(async () => {
+      updates += 1;
+      return { ok: true };
+    })
+  });
+
+  for (const tableNumber of ["-1", "1.5", "not-a-number", "1e0", "0x1", "01", "0", "13"]) {
+    const response = await server.inject(
+      "POST",
+      `/api/tables/${tableNumber}/checkout`,
+      undefined,
+      { authorization: `Bearer ${CHECKOUT_API_KEY}` }
+    );
+    assert.equal(response.status, 400);
+  }
+  assert.equal(updates, 0);
+});
+
+test("checkout rotates the QR, revokes all phones, closes the order, and renders Welcome", async () => {
+  const welcomeUpdates = [];
+  const visitStore = createVisitStore();
+  const store = createOrderStore({ now: () => new Date("2026-07-22T03:00:00Z") });
+  const server = createCustomerServer({
+    checkoutApiKey: CHECKOUT_API_KEY,
+    visitStore,
+    store,
+    epaperClient: {
+      updateTableInUse: async () => ({ ok: true }),
+      updateTableWelcome: async (tableNumber, orderingUrl) => {
+        welcomeUpdates.push({ tableNumber, orderingUrl });
+        return { ok: true };
+      }
+    }
+  });
+  const oldToken = visitStore.getRawTokenForDisplay(7);
+  const before = visitStore.getCurrentVisit(7);
+  const firstCookie = await enrollPhone(server, visitStore, 7);
+  const secondCookie = await enrollPhone(server, visitStore, 7);
+  const order = await server.inject("POST", "/api/orders", {
+    items: [{ id: "crispy-gyoza", quantity: 1 }]
+  }, customerHeaders(firstCookie));
+
+  const response = await server.inject(
+    "POST",
+    "/api/tables/7/checkout",
+    undefined,
+    { authorization: `Bearer ${CHECKOUT_API_KEY}` }
+  );
+
+  const replacement = visitStore.getCurrentVisit(7);
+  const newToken = visitStore.getRawTokenForDisplay(7);
+  const oldQr = await server.inject("GET", `/t/${oldToken}`);
+  const firstPhone = await server.inject("GET", "/api/session", undefined, { cookie: firstCookie });
+  const secondPhone = await server.inject("GET", "/api/session", undefined, { cookie: secondCookie });
+  const newCookie = await enrollPhone(server, visitStore, 7);
+  const freshSession = await server.inject("GET", "/api/session", undefined, { cookie: newCookie });
+
+  assert.equal(order.status, 201);
+  assert.deepEqual(response.body, { ok: true, tableNumber: 7, status: "Welcome" });
+  assert.equal(response.status, 200);
+  assert.equal(replacement.generation, before.generation + 1);
+  assert.equal(replacement.status, "welcome");
+  assert.notEqual(newToken, oldToken);
+  assert.deepEqual(welcomeUpdates, [{ tableNumber: 7, orderingUrl: replacement.orderingUrl }]);
+  assert.equal(oldQr.status, 410);
+  assert.equal(firstPhone.status, 401);
+  assert.equal(secondPhone.status, 401);
+  assert.equal(freshSession.body.session.slipNumber, null);
+  assert.deepEqual(freshSession.body.session.orders, []);
+  const responseText = JSON.stringify(response.body);
+  assert.equal(responseText.includes(replacement.orderingUrl), false);
+  assert.equal(responseText.includes(newToken), false);
+  assert.equal(responseText.includes(CHECKOUT_API_KEY), false);
+});
+
+test("checkout failure keeps revocation and closed orders while retrying one pending replacement", async () => {
+  const welcomeUrls = [];
+  const visitStore = createVisitStore();
+  const store = createOrderStore({ now: () => new Date("2026-07-22T03:00:00Z") });
+  const server = createCustomerServer({
+    checkoutApiKey: CHECKOUT_API_KEY,
+    visitStore,
+    store,
+    epaperClient: {
+      updateTableInUse: async () => ({ ok: true }),
+      updateTableWelcome: async (_tableNumber, orderingUrl) => {
+        welcomeUrls.push(orderingUrl);
+        if (welcomeUrls.length === 1) {
+          throw new Error(`Failed to render ${orderingUrl} with Bearer ${CHECKOUT_API_KEY}`);
+        }
+        return { ok: true };
+      }
+    }
+  });
+  const oldToken = visitStore.getRawTokenForDisplay(7);
+  const before = visitStore.getCurrentVisit(7);
+  const firstCookie = await enrollPhone(server, visitStore, 7);
+  const secondCookie = await enrollPhone(server, visitStore, 7);
+  await server.inject("POST", "/api/orders", {
+    items: [{ id: "crispy-gyoza", quantity: 1 }]
+  }, customerHeaders(firstCookie));
+
+  const first = await server.inject(
+    "POST",
+    "/api/tables/7/checkout",
+    undefined,
+    { authorization: `Bearer ${CHECKOUT_API_KEY}` }
+  );
+  const pending = visitStore.getCurrentVisit(7);
+  const pendingToken = visitStore.getRawTokenForDisplay(7);
+  const oldQr = await server.inject("GET", `/t/${oldToken}`);
+  const firstPhone = await server.inject("GET", "/api/session", undefined, { cookie: firstCookie });
+  const secondPhone = await server.inject("GET", "/api/session", undefined, { cookie: secondCookie });
+
+  assert.equal(first.status, 502);
+  assert.deepEqual(first.body, { error: "E-paper display update failed" });
+  assert.equal(pending.status, "pending_display");
+  assert.equal(pending.generation, before.generation + 1);
+  assert.equal(oldQr.status, 410);
+  assert.equal(firstPhone.status, 401);
+  assert.equal(secondPhone.status, 401);
+  assert.equal(store.getSession(7).slipNumber, null);
+  assert.equal(JSON.stringify(first.body).includes(pending.orderingUrl), false);
+  assert.equal(JSON.stringify(first.body).includes(pendingToken), false);
+  assert.equal(JSON.stringify(first.body).includes(CHECKOUT_API_KEY), false);
+
+  const second = await server.inject(
+    "POST",
+    "/api/tables/7/checkout",
+    undefined,
+    { authorization: `Bearer ${CHECKOUT_API_KEY}` }
+  );
+  const completed = visitStore.getCurrentVisit(7);
+
+  assert.equal(second.status, 200);
+  assert.deepEqual(second.body, { ok: true, tableNumber: 7, status: "Welcome" });
+  assert.deepEqual(welcomeUrls, [pending.orderingUrl, pending.orderingUrl]);
+  assert.equal(completed.generation, pending.generation);
+  assert.equal(completed.orderingUrl, pending.orderingUrl);
+  assert.equal(completed.status, "welcome");
+});
+
+test("checkout and an already-authenticated order follow the same table queue", async () => {
+  let releaseProvisioning;
+  const provisioningHeld = new Promise((resolve) => {
+    releaseProvisioning = resolve;
+  });
+  let provisioningStarted;
+  const provisioningBegun = new Promise((resolve) => {
+    provisioningStarted = resolve;
+  });
+  let welcomeCalls = 0;
+  const displayUpdates = [];
+  const visitStore = createVisitStore();
+  const store = createOrderStore({ now: () => new Date("2026-07-22T03:00:00Z") });
+  const server = createCustomerServer({
+    checkoutApiKey: CHECKOUT_API_KEY,
+    tableDisplayApiKey: "display-secret",
+    visitStore,
+    store,
+    epaperClient: {
+      updateTableWelcome: async () => {
+        welcomeCalls += 1;
+        if (welcomeCalls === 1) {
+          provisioningStarted();
+          await provisioningHeld;
+          displayUpdates.push("provisioning Welcome");
+        } else {
+          displayUpdates.push("checkout Welcome");
+        }
+        return { ok: true };
+      },
+      updateTableInUse: async () => {
+        displayUpdates.push("Table is in use");
+        return { ok: true };
+      }
+    }
+  });
+  const cookie = await enrollPhone(server, visitStore, 7);
+  const provisioning = server.inject(
+    "POST",
+    "/api/table-displays/7/welcome",
+    undefined,
+    { authorization: "Bearer display-secret" }
+  );
+  await provisioningBegun;
+
+  const checkout = server.inject(
+    "POST",
+    "/api/tables/7/checkout",
+    undefined,
+    { authorization: `Bearer ${CHECKOUT_API_KEY}` }
+  );
+  const order = server.inject("POST", "/api/orders", {
+    items: [{ id: "crispy-gyoza", quantity: 1 }]
+  }, customerHeaders(cookie));
+  await new Promise(setImmediate);
+  releaseProvisioning();
+
+  const [provisioningResponse, checkoutResponse, orderResponse] = await Promise.all([
+    provisioning,
+    checkout,
+    order
+  ]);
+
+  assert.equal(provisioningResponse.status, 200);
+  assert.equal(checkoutResponse.status, 200);
+  assert.equal(orderResponse.status, 401);
+  assert.deepEqual(displayUpdates, ["provisioning Welcome", "checkout Welcome"]);
+  assert.equal(visitStore.getCurrentVisit(7).status, "welcome");
+  assert.equal(store.getSession(7).slipNumber, null);
 });
 
 test("server can reuse epaper hub API_KEY when EPAPER_API_KEY is not set", () => {

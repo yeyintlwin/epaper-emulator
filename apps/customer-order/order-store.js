@@ -98,6 +98,15 @@ function createOrderStore(options = {}) {
     return { isFirstOrderForSession, session: snapshot(session), order: snapshot(order) };
   }
 
+  function closeSession(tableNumber) {
+    const key = String(normalizeTableNumber(tableNumber));
+    const session = sessions.get(key);
+    if (!session) return null;
+    const closed = snapshot(session);
+    sessions.delete(key);
+    return closed;
+  }
+
   function callStaff(tableNumber, reason) {
     const session = getSession(tableNumber);
     return {
@@ -108,7 +117,7 @@ function createOrderStore(options = {}) {
     };
   }
 
-  return { getMenu, getSession, placeOrder, callStaff };
+  return { getMenu, getSession, placeOrder, closeSession, callStaff };
 }
 
 module.exports = {
