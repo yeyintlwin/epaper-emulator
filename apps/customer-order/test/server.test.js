@@ -21,6 +21,10 @@ function initializeTableDisplays(options = {}) {
   return initializeCustomerTableDisplays({ visitStore: createVisitStore(), ...options });
 }
 
+test("createServer requires an explicit visit store", () => {
+  assert.throws(() => createCustomerServer(), /visitStore is required/);
+});
+
 function displayClient(updateTableWelcome) {
   return {
     updateTableWelcome,

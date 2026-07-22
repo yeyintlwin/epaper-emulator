@@ -95,6 +95,9 @@ function sendStatic(req, res) {
 function createServer(options = {}) {
   const store = options.store || createOrderStore({ now: options.now });
   const visitStore = options.visitStore;
+  if (!visitStore || typeof visitStore.getOrderingUrl !== "function") {
+    throw new Error("visitStore is required and must provide getOrderingUrl");
+  }
   const pendingEpaperTables = new Set();
   const tableDisplayUpdates = new Map();
   const tableDisplayApiKey = options.tableDisplayApiKey ?? process.env.TABLE_DISPLAY_API_KEY;
