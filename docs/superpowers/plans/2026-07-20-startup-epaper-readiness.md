@@ -172,7 +172,7 @@ git commit -m "Initialize e-paper displays on order startup"
 - Modify: `apps/epaper-hub/test/deploy-config.test.js`
 
 **Interfaces:**
-- Consumes: customer-order `start()` and e-paper hub `GET /api/health`.
+- Consumes: customer-order `start()` and e-paper hub `GET /health`.
 - Produces: Compose services `epaper-hub` and `customer-order`, with images selected by `EPAPER_IMAGE` and `CUSTOMER_ORDER_IMAGE`.
 
 - [ ] **Step 1: Write failing deployment configuration assertions**
@@ -423,7 +423,7 @@ Confirm DNS for `order.yeyintlwin.com` resolves to `57.180.62.148`. Configure Ng
 Run:
 
 ```bash
-curl -fsS https://order.yeyintlwin.com/api/health
+curl -fsS https://order.yeyintlwin.com/health
 curl -fsS https://epaper-hub.yeyintlwin.com/api/screens
 ```
 
@@ -435,7 +435,7 @@ Inspect the hub API/emulator and confirm table IDs 1 through 12 show `WELCOME`, 
 
 - [ ] **Step 5: Restart customer-order and verify reset behavior**
 
-Mark one emulator display `Table is in use`, restart only the customer-order container, and confirm all 12 displays return to `WELCOME` before `https://order.yeyintlwin.com/api/health` becomes available again.
+Mark one emulator display `Table is in use`, restart only the customer-order container, and confirm all 12 displays return to `WELCOME` before `https://order.yeyintlwin.com/health` becomes available again.
 
 - [ ] **Step 6: Record final evidence**
 
