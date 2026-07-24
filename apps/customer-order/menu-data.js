@@ -1,6 +1,7 @@
 const menuItems = [
   {
     id: "tonkotsu-ramen",
+    featured: true,
     name: "Tonkotsu Ramen",
     category: "Recommended",
     price: 1280,
@@ -9,6 +10,7 @@ const menuItems = [
   },
   {
     id: "crispy-gyoza",
+    featured: true,
     name: "Crispy Gyoza",
     category: "Recommended",
     price: 620,
@@ -25,6 +27,7 @@ const menuItems = [
   },
   {
     id: "salmon-don",
+    featured: true,
     name: "Salmon Don",
     category: "All Items",
     price: 1480,
@@ -65,6 +68,7 @@ const menuItems = [
   },
   {
     id: "mango-pudding",
+    featured: true,
     name: "Mango Pudding",
     category: "Desserts",
     price: 480,
@@ -89,6 +93,7 @@ const menuItems = [
   },
   {
     id: "yuzu-soda",
+    featured: true,
     name: "Yuzu Soda",
     category: "Soft Drinks",
     price: 420,
@@ -97,6 +102,7 @@ const menuItems = [
   },
   {
     id: "draft-beer",
+    featured: true,
     name: "Draft Beer",
     category: "Alcoholic Drinks",
     price: 620,

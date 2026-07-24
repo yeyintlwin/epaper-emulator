@@ -3,132 +3,159 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#ffffff" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <title>Restaurant Order</title>
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
+    <!-- ============ App bar (hamburger lives here) ============ -->
+    <header class="appBar" id="appBar">
+      <div class="appBarInner">
+        <button class="iconBtn" id="openDrawer" type="button" aria-label="Open menu">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18v2H3V6Zm0 5h18v2H3v-2Zm0 5h18v2H3v-2Z"/></svg>
+        </button>
+        <div class="appBarTitle">
+          <span class="shopLogo" id="shopLogo" aria-hidden="true">S</span>
+          <span class="shopName" id="shopName">Sakura Kitchen</span>
+        </div>
+        <span class="tableTag" id="tableTag">T-000</span>
+      </div>
+    </header>
+
     <main class="appShell">
-      <header class="topBar">
-        <div>
-          <p class="eyebrow">Table</p>
-          <h1 id="tableTitle">Table --</h1>
-        </div>
-        <div class="topMeta">
-          <span id="sessionStatus">Welcome</span>
-          <strong id="slipNumber">No slip yet</strong>
-        </div>
-      </header>
-
-      <section class="statusPanel">
-        <span class="statusDot"></span>
-        <span>Scan, order, relax. Your table stays linked to this slip.</span>
-      </section>
-
-      <section class="appView active" id="menuView" data-panel="menu">
-        <div class="viewHeader">
-          <div>
-            <p class="eyebrow">Menu</p>
-            <h2 id="activeCategoryTitle">Recommended</h2>
-          </div>
-          <button class="secondaryButton" id="openCategoryDrawer" type="button">Categories</button>
+      <!-- ============ Menu ============ -->
+      <section class="view active" id="menuView" data-panel="menu">
+        <div class="viewHead">
+          <h2 id="activeCategoryTitle">Recommended</h2>
         </div>
 
-        <label class="searchBox">
+        <label class="searchBox" id="searchBox">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m21 20-5.6-5.6a7 7 0 1 0-1.4 1.4L20 21l1-1ZM5 10a5 5 0 1 1 10 0A5 5 0 0 1 5 10Z"/></svg>
-          <input id="searchInput" type="search" placeholder="Search menu" autocomplete="off" />
+          <input id="searchInput" type="search" placeholder="Search the menu" autocomplete="off" />
         </label>
 
         <section class="menuList" id="menuList" aria-live="polite"></section>
       </section>
 
-      <section class="appView" id="bucketView" data-panel="bucket">
-        <div class="viewHeader">
-          <div>
-            <p class="eyebrow">Order Bucket</p>
-            <h2 id="cartCount">0 items</h2>
-          </div>
-          <strong id="cartTotal">JPY 0</strong>
+      <!-- ============ Order bucket ============ -->
+      <section class="view" id="bucketView" data-panel="bucket">
+        <div class="viewHead">
+          <h2>Your order</h2>
+          <span class="countPill" id="bucketCount">0</span>
         </div>
         <div class="cartItems" id="cartItems"></div>
-        <button class="primaryButton" id="placeOrderButton" type="button">Place Order Now</button>
+        <div class="bucketFoot" id="bucketFoot" hidden>
+          <div class="totalRow"><span>Total</span><strong id="cartTotal">¥0</strong></div>
+          <button class="btnPrimary" id="placeOrderButton" type="button">Place order</button>
+        </div>
       </section>
 
-      <section class="appView" id="historyView" data-panel="history">
-        <div class="viewHeader">
-          <div>
-            <p class="eyebrow">Order History</p>
-            <h2>Current table session</h2>
-          </div>
-        </div>
+      <!-- ============ History ============ -->
+      <section class="view" id="historyView" data-panel="history">
+        <div class="viewHead"><h2>Order history</h2></div>
         <div class="historyList" id="historyList"></div>
       </section>
 
-      <section class="appView" id="staffView" data-panel="staff">
-        <div class="staffPanel">
-          <p class="eyebrow">Call Staff</p>
-          <h2>Need help at the table?</h2>
-          <p>Send a quiet staff request for assistance, water, cleanup, or anything else.</p>
-          <button class="primaryButton" id="callStaffButton" type="button">Call Staff</button>
+      <!-- ============ Call staff ============ -->
+      <section class="view" id="staffView" data-panel="staff">
+        <div class="viewHead"><h2>Need something?</h2></div>
+        <p class="lead">Tap below and a staff member will come to your table — assistance, water, cleanup, or your held dessert.</p>
+        <div class="actionStack">
+          <button class="btnPrimary" id="callStaffButton" type="button">Call staff</button>
+          <button class="btnGhost center" id="serveDessertButton" type="button">Bring my dessert</button>
         </div>
       </section>
 
-      <section class="appView" id="checkoutPanel" data-panel="checkout">
-        <div class="viewHeader">
-          <div>
-            <p class="eyebrow">Checkout</p>
-            <h2>Bill summary</h2>
-          </div>
+      <!-- ============ Checkout ============ -->
+      <section class="view" id="checkoutView" data-panel="checkout">
+        <div class="viewHead"><h2>Checkout</h2></div>
+        <div class="billCard">
+          <div class="totals" id="totals"></div>
+          <div class="checkoutBarcode" id="checkoutBarcode" aria-label="Checkout barcode"></div>
         </div>
-        <div class="totals" id="totals"></div>
-        <label class="splitControl" id="billSplit">
-          Split bill
-          <input id="splitCount" type="number" min="1" max="12" value="1" />
-        </label>
-        <div class="splitResult" id="splitResult"></div>
-        <div class="checkoutBarcode" id="checkoutBarcode" aria-label="Checkout barcode"></div>
       </section>
     </main>
 
+    <!-- ============ Dead-QR block screen (full-screen) ============ -->
     <section class="blockScreen" id="blockScreen" role="alert">
       <svg class="blockIcon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3h8v8H3V3Zm2 2v4h4V5H5Zm8-2h8v8h-8V3Zm2 2v4h4V5h-4ZM3 13h8v8H3v-8Zm2 2v4h4v-4H5Zm11-2h5v2h-5v-2Zm3 4h2v4h-6v-2h4v-2Zm-6 0h2v6h-2v-6Z"/></svg>
       <h2 class="blockHeading" id="blockHeading"></h2>
       <p class="blockMessage" id="blockMessage"></p>
     </section>
 
+    <!-- ============ Info drawer (opened by hamburger) ============ -->
     <div class="drawerBackdrop" id="drawerBackdrop"></div>
-    <aside class="categoryDrawer" id="categoryDrawer" aria-label="Menu categories">
-      <div class="drawerHeader">
-        <div>
-          <p class="eyebrow">Menu</p>
-          <h2>Categories</h2>
-        </div>
-        <button class="iconButton" id="closeCategoryDrawer" type="button" aria-label="Close categories">x</button>
+    <aside class="drawer" id="categoryDrawer" aria-label="Menu categories" aria-hidden="true">
+      <div class="drawerHead">
+        <h2>Categories</h2>
+        <button class="iconBtn" id="closeDrawer" type="button" aria-label="Close">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12 19 6.4 17.6 5 12 10.6Z"/></svg>
+        </button>
       </div>
       <div class="categoryList" id="categoryList"></div>
+      <div class="drawerActions">
+        <button class="btnGhost" type="button" id="howToOrder">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 17h2v-2h-2v2Zm1-15a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm0 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16ZM12 6a3.5 3.5 0 0 0-3.5 3.5h2A1.5 1.5 0 1 1 12 11c-.8 0-1 .6-1 1.2V14h2v-1.1A3.5 3.5 0 0 0 12 6Z"/></svg>
+          How to order
+        </button>
+      </div>
     </aside>
 
+    <!-- ============ Bottom nav ============ -->
     <nav class="bottomNav" id="bottomNav" aria-label="Primary">
+      <div class="bottomNavInner">
       <button class="navItem active" type="button" data-view="menu">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v2H4V5Zm0 6h16v2H4v-2Zm0 6h10v2H4v-2Z"/></svg>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 5c-1.11-.35-2.33-.5-3.5-.5-1.95 0-4.05.4-5.5 1.5-1.45-1.1-3.55-1.5-5.5-1.5S2.45 4.9 1 6v14.65c0 .25.25.5.5.5.1 0 .15-.05.25-.05C3.1 20.45 5.05 20 6.5 20c1.95 0 4.05.4 5.5 1.5 1.35-.85 3.8-1.5 5.5-1.5 1.65 0 3.35.3 4.75 1.05.1.05.15.05.25.05.25 0 .5-.25.5-.5V6c-.6-.45-1.25-.75-2-1zm0 13.5c-1.1-.35-2.3-.5-3.5-.5-1.7 0-4.15.65-5.5 1.5V8c1.35-.85 3.8-1.5 5.5-1.5 1.2 0 2.4.15 3.5.5v11.5z"/></svg>
         <span>Menu</span>
       </button>
       <button class="navItem" type="button" data-view="bucket">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 18a2 2 0 1 0 0 4 2 2 0 0 0 0-4Zm10 0a2 2 0 1 0 0 4 2 2 0 0 0 0-4ZM3 3h2l2.2 10.4A3 3 0 0 0 10.1 16H18v-2h-7.9a1 1 0 0 1-1-.8L8.8 12H18l3-7H7.3L6.7 3H3v2Z"/></svg>
-        <span>Order Bucket</span>
+        <span class="navIconWrap">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 18a2 2 0 1 0 0 4 2 2 0 0 0 0-4Zm10 0a2 2 0 1 0 0 4 2 2 0 0 0 0-4ZM3 3h2l2.2 10.4A3 3 0 0 0 10.1 16H18v-2h-7.9a1 1 0 0 1-1-.8L8.8 12H18l3-7H7.3L6.7 3H3v2Z"/></svg>
+          <span class="navBadge" id="navBadge" hidden>0</span>
+        </span>
+        <span>Bucket</span>
       </button>
       <button class="navItem" type="button" data-view="history">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9h-2a7 7 0 1 1-2.1-5H14v2h6V3h-2v2.1A9 9 0 0 0 12 3Zm-1 4v6l5 3 .9-1.6-3.9-2.3V7h-2Z"/></svg>
-        <span>Order History</span>
+        <span>History</span>
       </button>
       <button class="navItem" type="button" data-view="staff">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a6 6 0 0 0-6 6v3.5L4 16v1h16v-1l-2-3.5V9a6 6 0 0 0-6-6Zm0 18a3 3 0 0 0 2.8-2H9.2A3 3 0 0 0 12 21Z"/></svg>
-        <span>Call Staff</span>
+        <span>Staff</span>
       </button>
       <button class="navItem" type="button" data-view="checkout">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14v16H5V4Zm2 2v12h10V6H7Zm2 2h6v2H9V8Zm0 4h6v2H9v-2Z"/></svg>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14v16l-2.5-1.5L14 20l-2-1.5L10 20l-2.5-1.5L5 20V4Zm4 4v2h6V8H9Zm0 4v2h6v-2H9Z"/></svg>
         <span>Checkout</span>
       </button>
+      </div>
     </nav>
+
+    <!-- ============ Dessert serving-time sheet ============ -->
+    <div class="sheetBackdrop" id="dessertBackdrop" hidden></div>
+    <aside class="sheet" id="dessertSheet" aria-label="Dessert serving time" hidden>
+      <div class="sheetHandle" aria-hidden="true"></div>
+      <h3>When should we serve your dessert?</h3>
+      <button class="timingOption" type="button" data-timing="now">
+        <span class="timingIcon" aria-hidden="true">🍽️</span>
+        <span class="timingText"><strong>Serve now</strong><small>Bring it together with my order</small></span>
+      </button>
+      <button class="timingOption" type="button" data-timing="later">
+        <span class="timingIcon" aria-hidden="true">⏱️</span>
+        <span class="timingText"><strong>Serve after my meal</strong><small>Hold it — I'll tap "Bring my dessert" when I'm ready</small></span>
+      </button>
+    </aside>
+
+    <!-- ============ Alcohol 21+ age gate (full screen) ============ -->
+    <div class="ageGate" id="ageGate" hidden>
+      <div class="ageGateInner">
+        <div class="ageBadge" aria-hidden="true">21+</div>
+        <h2>Are you 21 or older?</h2>
+        <p>Alcoholic drinks can only be ordered by guests aged 21 and above.</p>
+        <button class="btnPrimary" id="ageYes" type="button">Yes, I'm 21 or older</button>
+        <button class="btnText" id="ageNo" type="button">No, take me back</button>
+      </div>
+    </div>
 
     <div class="toast" id="toast" role="status"></div>
     <script src="/app.js"></script>
