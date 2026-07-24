@@ -188,7 +188,8 @@ function placeholderImage(item) {
 const EMPTY_ICON = {
   menu: `<path d="M8.1 13.34l2.83-2.83L3.91 3.5a4 4 0 0 0 0 5.66l4.19 4.18zm6.78-1.81c1.53.71 3.68.21 5.27-1.38 1.91-1.91 2.28-4.65.81-6.12-1.46-1.46-4.2-1.1-6.12.81-1.59 1.59-2.09 3.74-1.38 5.27L3.7 19.87l1.41 1.41L12 14.41l6.88 6.88 1.41-1.41L13.41 13l1.47-1.47z"/>`,
   bucket: `<path d="M7 18a2 2 0 1 0 0 4 2 2 0 0 0 0-4Zm10 0a2 2 0 1 0 0 4 2 2 0 0 0 0-4ZM3 3h2l2.2 10.4A3 3 0 0 0 10.1 16H18v-2h-7.9a1 1 0 0 1-1-.8L8.8 12H18l3-7H7.3L6.7 3H3v2Z"/>`,
-  history: `<path d="M12 3a9 9 0 1 0 9 9h-2a7 7 0 1 1-2.1-5H14v2h6V3h-2v2.1A9 9 0 0 0 12 3Zm-1 4v6l5 3 .9-1.6-3.9-2.3V7h-2Z"/>`
+  history: `<path d="M12 3a9 9 0 1 0 9 9h-2a7 7 0 1 1-2.1-5H14v2h6V3h-2v2.1A9 9 0 0 0 12 3Zm-1 4v6l5 3 .9-1.6-3.9-2.3V7h-2Z"/>`,
+  checkout: `<path d="M5 4h14v16l-2.5-1.5L14 20l-2-1.5L10 20l-2.5-1.5L5 20V4Zm4 4v2h6V8H9Zm0 4v2h6v-2H9Z"/>`
 };
 
 function emptyState(icon, message) {
@@ -322,6 +323,11 @@ function renderSession() {
   const orders = s && s.orders ? s.orders : [];
   const hasDessert = orders.some((o) => Array.isArray(o.items) && o.items.some((i) => i.category === "Desserts"));
   $("#serveDessertButton").hidden = !hasDessert;
+  // Nothing ordered yet -> nothing to check out.
+  const hasOrders = orders.length > 0;
+  $("#billCard").hidden = !hasOrders;
+  $("#checkoutEmpty").hidden = hasOrders;
+  if (!hasOrders) $("#checkoutEmpty").innerHTML = emptyState(EMPTY_ICON.checkout, "No orders yet — place an order to check out.");
 }
 
 async function placeOrder() {
