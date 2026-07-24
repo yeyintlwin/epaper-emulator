@@ -42,6 +42,10 @@ function showBlockScreen(reason) {
   document.documentElement.classList.add("blocked");
 }
 
+function toastUnlessBlocked(message) {
+  if (!document.documentElement.classList.contains("blocked")) showToast(message);
+}
+
 async function api(path, options) {
   const response = await fetch(path, {
     headers: { "Content-Type": "application/json" },
@@ -252,14 +256,12 @@ $("#closeCategoryDrawer").addEventListener("click", closeDrawer);
 $("#drawerBackdrop").addEventListener("click", closeDrawer);
 $("#searchInput").addEventListener("input", renderMenu);
 $("#splitCount").addEventListener("input", () => renderSession());
-$("#placeOrderButton").addEventListener("click", () => placeOrder().catch((error) => showToast(error.message)));
-$("#callStaffButton").addEventListener("click", () => callStaff().catch((error) => showToast(error.message)));
+$("#placeOrderButton").addEventListener("click", () => placeOrder().catch((error) => toastUnlessBlocked(error.message)));
+$("#callStaffButton").addEventListener("click", () => callStaff().catch((error) => toastUnlessBlocked(error.message)));
 
 const params = new URLSearchParams(window.location.search);
 if (params.get("e") === "expired") {
   showBlockScreen("invalid");
 } else {
-  init().catch((error) => {
-    if (!document.documentElement.classList.contains("blocked")) showToast(error.message);
-  });
+  init().catch((error) => toastUnlessBlocked(error.message));
 }
