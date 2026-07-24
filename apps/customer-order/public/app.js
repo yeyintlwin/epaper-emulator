@@ -396,6 +396,37 @@ document.addEventListener("keydown", (e) => { if (e.key === "Escape") { closeDra
 const appBar = $("#appBar");
 window.addEventListener("scroll", () => appBar.classList.toggle("scrolled", window.scrollY > 4), { passive: true });
 
+// DEMO ONLY: dishes have no real photos yet, so fetch stand-in food photos at
+// runtime from free food-photo APIs (TheMealDB for food, TheCocktailDB for drinks)
+// by dish name. Best-effort; unmatched items keep the placeholder. Replace this
+// with real per-item photos from admin management.
+const DRINK_CATEGORIES = ["Soft Drinks", "Alcoholic Drinks"];
+async function fetchFoodImage(item) {
+  const base = DRINK_CATEGORIES.includes(item.category)
+    ? "https://www.thecocktaildb.com/api/json/v1/1/search.php?s="
+    : "https://www.themealdb.com/api/json/v1/1/search.php?s=";
+  const words = String(item.name).trim().split(/\s+/);
+  for (const term of [item.name, words[words.length - 1]]) {
+    try {
+      const res = await fetch(base + encodeURIComponent(term));
+      if (!res.ok) continue;
+      const data = await res.json();
+      const rec = (data.meals || data.drinks || [])[0];
+      const url = rec && (rec.strMealThumb || rec.strDrinkThumb);
+      if (url) return url;
+    } catch { /* ignore network errors */ }
+  }
+  return "";
+}
+async function enrichImages() {
+  const targets = state.menu.items.filter((it) => !it.image && it.category !== "Service & Utensils");
+  await Promise.all(targets.map(async (it) => {
+    const url = safeImageUrl(await fetchFoodImage(it));
+    if (url) it.image = url;
+  }));
+  renderMenu();
+}
+
 async function init() {
   const [menu, sessionResult] = await Promise.all([
     api("/api/menu"),
@@ -407,6 +438,7 @@ async function init() {
   renderSession();
   renderMenu();
   renderBucket();
+  enrichImages().catch(() => {});
 }
 
 const params = new URLSearchParams(window.location.search);
