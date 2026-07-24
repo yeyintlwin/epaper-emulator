@@ -24,10 +24,6 @@
         <span>Scan, order, relax. Your table stays linked to this slip.</span>
       </section>
 
-      <section class="statusPanel" id="rescanMessage" hidden>
-        Scan the current table QR to continue
-      </section>
-
       <section class="appView active" id="menuView" data-panel="menu">
         <div class="viewHeader">
           <div>
@@ -92,6 +88,12 @@
         <div class="checkoutBarcode" id="checkoutBarcode" aria-label="Checkout barcode"></div>
       </section>
     </main>
+
+    <section class="blockScreen" id="blockScreen" role="alertdialog" aria-live="assertive">
+      <svg class="blockIcon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3h8v8H3V3Zm2 2v4h4V5H5Zm8-2h8v8h-8V3Zm2 2v4h4V5h-4ZM3 13h8v8H3v-8Zm2 2v4h4v-4H5Zm11-2h5v2h-5v-2Zm3 4h2v4h-6v-2h4v-2Zm-6 0h2v6h-2v-6Z"/></svg>
+      <h2 class="blockHeading" id="blockHeading"></h2>
+      <p class="blockMessage" id="blockMessage"></p>
+    </section>
 
     <div class="drawerBackdrop" id="drawerBackdrop"></div>
     <aside class="categoryDrawer" id="categoryDrawer" aria-label="Menu categories">

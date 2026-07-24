@@ -518,3 +518,48 @@ h2 {
 .toast.show {
   transform: translateY(0);
 }
+
+.blockScreen {
+  display: none;
+}
+
+.blocked .appShell,
+.blocked .bottomNav,
+.blocked .categoryDrawer,
+.blocked .drawerBackdrop {
+  display: none;
+}
+
+.blocked .blockScreen {
+  display: flex;
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 32px;
+  text-align: center;
+  background: var(--bg);
+  color: var(--ink);
+}
+
+.blockIcon {
+  width: 64px;
+  height: 64px;
+  fill: var(--accent);
+}
+
+.blockHeading {
+  margin: 0;
+  font-size: 22px;
+}
+
+.blockMessage {
+  margin: 0;
+  max-width: 320px;
+  color: var(--muted);
+  font-size: 15px;
+  line-height: 1.5;
+}
