@@ -25,6 +25,14 @@ const state = {
 const money = new Intl.NumberFormat("en-US", { style: "currency", currency: "JPY", maximumFractionDigits: 0 });
 const $ = (s) => document.querySelector(s);
 
+// Menu content (names, ids, image URLs) originates from admin input served by the
+// backend, so treat it as untrusted when building HTML. esc() neutralises markup;
+// safeImageUrl() only allows http(s)/relative URLs (blocks javascript:, data:, breakouts).
+const esc = (s) => String(s == null ? "" : s)
+  .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+  .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+const safeImageUrl = (url) => (/^(?:https?:\/\/|\/)[^"'<>\s]*$/i.test(String(url || "")) ? String(url) : "");
+
 function showToast(message) {
   const toast = $("#toast");
   toast.textContent = message;
@@ -143,9 +151,9 @@ function renderCategories() {
   $("#categoryList").innerHTML = tabs()
     .map((tab) => {
       const active = tab === state.activeTab;
-      return `<button class="categoryButton ${active ? "active" : ""}" type="button" data-tab="${tab}">
+      return `<button class="categoryButton ${active ? "active" : ""}" type="button" data-tab="${esc(tab)}">
         <span class="catIcon"><svg viewBox="0 0 24 24" aria-hidden="true">${iconFor(tab)}</svg></span>
-        <span class="catName">${tab}</span>
+        <span class="catName">${esc(tab)}</span>
         ${active ? `<span class="catCheck">${check}</span>` : ""}
       </button>`;
     })
@@ -154,11 +162,12 @@ function renderCategories() {
 }
 
 function stepperMarkup(id, qty, mini) {
-  if (qty <= 0) return `<button class="addBtn" type="button" data-inc="${id}">Add</button>`;
+  const safeId = esc(id);
+  if (qty <= 0) return `<button class="addBtn" type="button" data-inc="${safeId}">Add</button>`;
   return `<div class="stepper ${mini ? "mini" : ""}" aria-label="quantity">
-      <button type="button" data-dec="${id}" aria-label="decrease">−</button>
+      <button type="button" data-dec="${safeId}" aria-label="decrease">−</button>
       <span>${qty}</span>
-      <button type="button" data-inc="${id}" aria-label="increase">+</button>
+      <button type="button" data-inc="${safeId}" aria-label="increase">+</button>
     </div>`;
 }
 
@@ -190,14 +199,15 @@ function emptyState(icon, message) {
 }
 
 function photoMarkup(item) {
-  return `<img class="photoImg" src="${item.image || PLACEHOLDER_IMAGE}" alt="" loading="lazy" />`;
+  const src = safeImageUrl(item.image) || PLACEHOLDER_IMAGE;
+  return `<img class="photoImg" src="${esc(src)}" alt="" loading="lazy" />`;
 }
 
 function listCard(item) {
   const price = item.price === 0 ? `<span class="price free">Free</span>` : `<span class="price">${money.format(item.price)}</span>`;
   return `<article class="menuItem">
       <div class="menuPhoto">${photoMarkup(item)}</div>
-      <div class="menuText"><h3>${item.name}</h3><p>${item.description}</p>${price}</div>
+      <div class="menuText"><h3>${esc(item.name)}</h3><p>${esc(item.description)}</p>${price}</div>
       <div class="menuAdd">${stepperMarkup(item.id, quantityFor(item.id), false)}</div>
     </article>`;
 }
@@ -207,15 +217,16 @@ function bentoTile(item, i) {
   const wide = i % 3 === 0;
   const hero = i === 0;
   const price = item.price === 0 ? "Free" : money.format(item.price);
-  const media = item.image
-    ? `<img class="bentoImg" src="${item.image}" alt="" loading="lazy" />`
-    : `<span class="glyph" aria-hidden="true">${monogram(item.name)}</span>`;
-  return `<article class="bentoTile ${wide ? "wide" : ""} ${hero ? "hero" : ""} ${item.image ? "has-photo" : ""}" style="--tint-bg:${t.bg};--tint-fg:${t.fg}">
+  const img = safeImageUrl(item.image);
+  const media = img
+    ? `<img class="bentoImg" src="${esc(img)}" alt="" loading="lazy" />`
+    : `<span class="glyph" aria-hidden="true">${esc(monogram(item.name))}</span>`;
+  return `<article class="bentoTile ${wide ? "wide" : ""} ${hero ? "hero" : ""} ${img ? "has-photo" : ""}" style="--tint-bg:${t.bg};--tint-fg:${t.fg}">
       ${media}
       <div class="bentoTop">
         ${item.tags.includes("popular") ? `<span class="tag">Popular</span>` : ""}
-        <h3>${item.name}</h3>
-        ${hero ? `<p>${item.description}</p>` : ""}
+        <h3>${esc(item.name)}</h3>
+        ${hero ? `<p>${esc(item.description)}</p>` : ""}
       </div>
       <div class="bentoFoot">
         <span class="price">${price}</span>
@@ -262,7 +273,7 @@ function renderBucket() {
   $("#cartItems").innerHTML = lines.length
     ? lines.map((item) => `<div class="cartLine">
         <div>
-          <h3>${item.name}</h3>
+          <h3>${esc(item.name)}</h3>
           <div class="unit">${item.price === 0 ? "Free" : money.format(item.price) + " each"}${isDessert(item) ? ` <span class="lineTag${state.dessertTiming.get(item.id) === "later" ? " later" : ""}">${state.dessertTiming.get(item.id) === "later" ? "After meal" : "Serve now"}</span>` : ""}</div>
         </div>
         <div class="right">
@@ -283,8 +294,8 @@ function renderHistory() {
     ? orders.map((order) => {
         const count = order.items.reduce((s, i) => s + i.quantity, 0);
         return `<article class="orderCard">
-          <header><strong>Slip ${order.id}</strong><span class="statusChip">${order.status || "Sent"}</span></header>
-          <ul>${order.items.map((i) => `<li>${i.quantity} × ${i.name}</li>`).join("")}</ul>
+          <header><strong>Slip ${esc(order.id)}</strong><span class="statusChip">${esc(order.status || "Sent")}</span></header>
+          <ul>${order.items.map((i) => `<li>${i.quantity} × ${esc(i.name)}</li>`).join("")}</ul>
           <footer><span>${count} item${count === 1 ? "" : "s"}</span><strong>${money.format(order.totals.total)}</strong></footer>
         </article>`;
       }).join("")
@@ -305,7 +316,7 @@ function renderBarcode(value) {
     const code = char.charCodeAt(0);
     return [`<span class="barcodeBar ${code % 2 ? "thin" : "wide"}"></span>`, `<span class="barcodeBar"></span>`];
   }).join("");
-  $("#checkoutBarcode").innerHTML = `<div class="barcodeBars">${bars}</div><span class="barcodeText">${text}</span>`;
+  $("#checkoutBarcode").innerHTML = `<div class="barcodeBars">${bars}</div><span class="barcodeText">${esc(text)}</span>`;
 }
 
 function renderSession() {
