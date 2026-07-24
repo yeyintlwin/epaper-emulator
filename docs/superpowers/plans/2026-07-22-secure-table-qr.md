@@ -1,6 +1,6 @@
 # Secure Table QR And Multi-Phone Sessions Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Replace predictable table-number QR URLs with concise opaque visit tokens, authorize customer APIs through per-phone sessions, and rotate the QR plus revoke every phone session after checkout.
 
@@ -36,7 +36,7 @@
 - Produces methods: `createInitialVisits()`, `getCurrentVisit(tableNumber)`, `getOrderingUrl(tableNumber)`, `getRawTokenForDisplay(tableNumber)`, `enroll(rawToken)`, `resolvePhoneSession(rawSession)`, `markInUse(tableNumber)`, `beginRotation(tableNumber)`, `completeRotation(tableNumber)`, and `expiredTableNumbers()`.
 - Public visit snapshots never contain raw tokens, token hashes, or phone-session hashes.
 
-- [ ] **Step 1: Write failing token and visit tests**
+- [x] **Step 1: Write failing token and visit tests**
 
 Create deterministic random bytes and assert exact token shape, uniqueness, metadata, URL length, and redaction:
 
@@ -70,13 +70,13 @@ test("creates twelve concise unique table visits without exposing secrets", () =
 });
 ```
 
-- [ ] **Step 2: Run the store test and verify RED**
+- [x] **Step 2: Run the store test and verify RED**
 
 Run: `npm --prefix apps/customer-order test -- test/table-visit-store.test.js`
 
 Expected: FAIL because `table-visit-store.js` does not exist.
 
-- [ ] **Step 3: Write failing multi-phone and revocation tests**
+- [x] **Step 3: Write failing multi-phone and revocation tests**
 
 ```js
 test("enrolls multiple phones into one visit and revokes both on rotation", () => {
@@ -103,7 +103,7 @@ test("enrolls multiple phones into one visit and revokes both on rotation", () =
 });
 ```
 
-- [ ] **Step 4: Implement the minimal store**
+- [x] **Step 4: Implement the minimal store**
 
 Use maps keyed by table number, SHA-256 token hash, and SHA-256 phone-session hash. Keep raw display tokens only in a private map. Generate both credential types with:
 
@@ -138,17 +138,17 @@ function businessClock(instant) {
 
 Validate `shopId`, production base URL, table IDs, raw credential shape, and expired/closed/pending states. Return snapshots through one redacting helper.
 
-- [ ] **Step 5: Add expiry and pending-rotation tests**
+- [x] **Step 5: Add expiry and pending-rotation tests**
 
 Use a mutable fake clock. Assert that enrollment and phone resolution return `null` at expiry, `expiredTableNumbers()` lists the table, `beginRotation()` increments generation once, and `completeRotation()` changes `pending_display` to `welcome` without replacing its URL.
 
-- [ ] **Step 6: Run focused tests and verify GREEN**
+- [x] **Step 6: Run focused tests and verify GREEN**
 
 Run: `npm --prefix apps/customer-order test -- test/table-visit-store.test.js`
 
 Expected: all table-visit-store tests PASS.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add apps/customer-order/table-visit-store.js apps/customer-order/test/table-visit-store.test.js
@@ -172,7 +172,7 @@ git commit -m "Add secure table visit token store"
 - Produces: `initializeTableDisplays({ epaperClient, visitStore, ... })`.
 - Preserves: the protected manual Welcome provisioning route re-renders the table's current opaque URL and does not rotate an active credential.
 
-- [ ] **Step 1: Write failing exact-URL client tests**
+- [x] **Step 1: Write failing exact-URL client tests**
 
 Change the client expectations to pass the URL explicitly:
 
@@ -188,7 +188,7 @@ assert.deepEqual(JSON.parse(requests[0].options.body), renderTableDisplay({
 
 Add the same assertion for `updateTableInUse`; verify missing or malformed URL is rejected by the existing SDK renderer.
 
-- [ ] **Step 2: Add the production QR-fit regression test**
+- [x] **Step 2: Add the production QR-fit regression test**
 
 In `packages/epaper-hub-sdk/test/table-template.test.js`:
 
@@ -204,13 +204,13 @@ test("fits a production opaque table visit URL", () => {
 });
 ```
 
-- [ ] **Step 3: Run focused tests and verify RED**
+- [x] **Step 3: Run focused tests and verify RED**
 
 Run: `npm --prefix apps/customer-order test -- test/epaper-client.test.js`
 
 Expected: FAIL because the client still builds `?table=N`.
 
-- [ ] **Step 4: Simplify the local e-paper client**
+- [x] **Step 4: Simplify the local e-paper client**
 
 Remove `orderingUrlFor`. Require the exact URL:
 
@@ -226,7 +226,7 @@ async function updateTableStatus(tableNumber, status, orderingUrl) {
 }
 ```
 
-- [ ] **Step 5: Make startup create and render 12 visits**
+- [x] **Step 5: Make startup create and render 12 visits**
 
 `start()` constructs one visit store, calls `createInitialVisits()`, passes it to `createServer`, and calls:
 
@@ -244,7 +244,7 @@ Add a test proving 12 unique `/t/` URLs are used before listening and that a ret
 
 Update the existing protected manual Welcome provisioning handler to read `visitStore.getOrderingUrl(tableNumber)`. Its tests must prove that provisioning preserves the current visit generation and URL; only checkout and business rollover rotate credentials.
 
-- [ ] **Step 6: Run customer and SDK tests**
+- [x] **Step 6: Run customer and SDK tests**
 
 Run: `npm --prefix apps/customer-order test -- test/epaper-client.test.js test/server.test.js`
 
@@ -252,7 +252,7 @@ Run: `npm --prefix packages/epaper-hub-sdk test -- test/table-template.test.js`
 
 Expected: all focused tests PASS.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add apps/customer-order/epaper-client.js apps/customer-order/test/epaper-client.test.js apps/customer-order/server.js apps/customer-order/test/server.test.js packages/epaper-hub-sdk/test/table-template.test.js
@@ -274,7 +274,7 @@ git commit -m "Render opaque table visit URLs"
 - Consumes: `visitStore.enroll(token)` and `visitStore.resolvePhoneSession(sessionId)`.
 - Produces: `GET /t/:token`, `rsid` cookie, authenticated session/order/staff endpoints, and rescan-required UI.
 
-- [ ] **Step 1: Write failing enrollment tests**
+- [x] **Step 1: Write failing enrollment tests**
 
 Create a visit store fixture, obtain table 7's raw display token, and request `/t/:token`. Assert:
 
@@ -288,19 +288,19 @@ assert.doesNotMatch(response.headers.Location, /table|shop|date/);
 
 Malformed, unknown, expired, and superseded tokens must return the same `410` body.
 
-- [ ] **Step 2: Write failing authorization and multi-phone tests**
+- [x] **Step 2: Write failing authorization and multi-phone tests**
 
 Enroll two cookies with one QR. Place an order from phone one and read `/api/session` from phone two. Assert both see table 7, the same slip, and the same order. Then send `table_number: 12` from phone one and assert the new order still belongs to table 7.
 
 Also assert missing/forged cookies return `401` for all three protected customer endpoints.
 
-- [ ] **Step 3: Run server tests and verify RED**
+- [x] **Step 3: Run server tests and verify RED**
 
 Run: `npm --prefix apps/customer-order test -- test/server.test.js`
 
 Expected: FAIL because QR enrollment and cookie authorization do not exist.
 
-- [ ] **Step 4: Add cookie, origin, and visit helpers**
+- [x] **Step 4: Add cookie, origin, and visit helpers**
 
 Use small local helpers:
 
@@ -320,7 +320,7 @@ function authorizedVisit(req, visitStore) {
 
 For POST customer routes, require `Content-Type: application/json` and `Origin` equal to `new URL(ORDER_BASE_URL).origin`; return `403` for mismatch before reading or mutating data.
 
-- [ ] **Step 5: Implement QR enrollment and protected APIs**
+- [x] **Step 5: Implement QR enrollment and protected APIs**
 
 Enrollment hashes the path token through the store and emits `302`, secure cookie, and `no-store`. Protected handlers derive `tableNumber` from the visit:
 
@@ -337,7 +337,7 @@ Preserve the current visit QR when updating `Table is in use`:
 epaperClient.updateTableInUse(visit.tableNumber, visitStore.getOrderingUrl(visit.tableNumber));
 ```
 
-- [ ] **Step 6: Update the browser to use its cookie session**
+- [x] **Step 6: Update the browser to use its cookie session**
 
 Remove `getTableNumber()` and all `table_number` request fields. Initialize with:
 
@@ -351,13 +351,13 @@ state.tableNumber = sessionResult.session.tableNumber;
 
 On `401` or `410`, add a `rescanRequired` class to the document, show `Scan the current table QR to continue`, and disable ordering/staff actions. Keep checkout barcode behavior unchanged.
 
-- [ ] **Step 7: Run server and UI tests**
+- [x] **Step 7: Run server and UI tests**
 
 Run: `npm --prefix apps/customer-order test -- test/server.test.js test/public-ui.test.js`
 
 Expected: all focused tests PASS, including two-phone shared-order and cross-table injection tests.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add apps/customer-order/server.js apps/customer-order/test/server.test.js apps/customer-order/public/app.js apps/customer-order/public/index.html apps/customer-order/test/public-ui.test.js
@@ -379,7 +379,7 @@ git commit -m "Authorize ordering through QR phone sessions"
 - Consumes: `visitStore.beginRotation(tableNumber)` and `visitStore.completeRotation(tableNumber)`.
 - Produces: `orderStore.closeSession(tableNumber)` and protected `POST /api/tables/:tableNumber/checkout`.
 
-- [ ] **Step 1: Write the failing order-store close test**
+- [x] **Step 1: Write the failing order-store close test**
 
 ```js
 test("checkout returns the final session and resets the table order state", () => {
@@ -393,7 +393,7 @@ test("checkout returns the final session and resets the table order state", () =
 });
 ```
 
-- [ ] **Step 2: Implement `closeSession` and verify GREEN**
+- [x] **Step 2: Implement `closeSession` and verify GREEN**
 
 Delete the table key only after taking a redacted snapshot. Return `null` when no stored order session exists.
 
@@ -401,23 +401,23 @@ Run: `npm --prefix apps/customer-order test -- test/order-store.test.js`
 
 Expected: all order-store tests PASS.
 
-- [ ] **Step 3: Write failing checkout security and rotation tests**
+- [x] **Step 3: Write failing checkout security and rotation tests**
 
 Test missing/wrong bearer authorization, noncanonical table IDs, old QR returning `410`, two old phone cookies returning `401`, new token differing from old, and e-paper receiving `WELCOME` plus the new URL.
 
 Use same-length wrong bearer coverage and assert `/api/config` and browser assets do not expose `CHECKOUT_API_KEY`.
 
-- [ ] **Step 4: Write the failing e-paper failure retry test**
+- [x] **Step 4: Write the failing e-paper failure retry test**
 
 Make the first Welcome update reject. Assert first checkout returns safe `502`; old QR and phones are already invalid; the second authorized checkout reuses the exact same pending URL and returns `200` without incrementing generation again.
 
-- [ ] **Step 5: Run checkout tests and verify RED**
+- [x] **Step 5: Run checkout tests and verify RED**
 
 Run: `npm --prefix apps/customer-order test -- --test-name-pattern='checkout' test/server.test.js test/order-store.test.js`
 
 Expected: FAIL because checkout behavior does not exist.
 
-- [ ] **Step 6: Implement serialized checkout**
+- [x] **Step 6: Implement serialized checkout**
 
 Read `CHECKOUT_API_KEY` from server options or environment and use `bearerMatches`. Inside the existing same-table display chain:
 
@@ -435,7 +435,7 @@ try {
 
 `beginRotation` must return the existing `pending_display` replacement on retry. Never include the replacement URL or token in the HTTP response.
 
-- [ ] **Step 7: Run checkout and full customer tests**
+- [x] **Step 7: Run checkout and full customer tests**
 
 Run: `npm --prefix apps/customer-order test -- test/order-store.test.js test/server.test.js test/public-ui.test.js`
 
@@ -443,7 +443,7 @@ Run: `npm --prefix apps/customer-order test`
 
 Expected: all customer-order tests PASS.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add apps/customer-order/order-store.js apps/customer-order/test/order-store.test.js apps/customer-order/server.js apps/customer-order/test/server.test.js apps/customer-order/test/public-ui.test.js
@@ -465,19 +465,19 @@ git commit -m "Rotate table access after checkout"
 - Consumes: `visitStore.expiredTableNumbers()` and the same checkout rotation path.
 - Produces: scheduled `reconcileExpiredVisits()` and required startup configuration.
 
-- [ ] **Step 1: Write failing rollover reconciliation tests**
+- [x] **Step 1: Write failing rollover reconciliation tests**
 
 Inject a fake scheduler and clock. Advance across 06:00 JST, run the scheduled callback, and assert expired phone sessions fail, each expired table gets exactly one replacement URL, and e-paper receives `WELCOME` with that URL.
 
 Add failure/retry coverage proving a failed table keeps one pending URL and unrelated tables complete.
 
-- [ ] **Step 2: Run focused tests and verify RED**
+- [x] **Step 2: Run focused tests and verify RED**
 
 Run: `npm --prefix apps/customer-order test -- --test-name-pattern='rollover' test/server.test.js test/table-visit-store.test.js`
 
 Expected: FAIL because no rollover scheduler exists.
 
-- [ ] **Step 3: Extract one reusable table rotation operation**
+- [x] **Step 3: Extract one reusable table rotation operation**
 
 Use one server-local function for checkout and rollover:
 
@@ -492,7 +492,7 @@ async function rotateTableDisplay(tableNumber) {
 
 Serialize it through `runTableDisplayUpdate`. Schedule the next 06:00 JST after startup and reschedule after every callback. Call `unref()` on the native timer so tests and shutdown are not held open.
 
-- [ ] **Step 4: Require and document runtime values**
+- [x] **Step 4: Require and document runtime values**
 
 Add:
 
@@ -512,7 +512,7 @@ BUSINESS_TIME_ZONE: Asia/Tokyo
 BUSINESS_DAY_ROLLOVER_HOUR: 6
 ```
 
-- [ ] **Step 5: Run focused, Compose, and full tests**
+- [x] **Step 5: Run focused, Compose, and full tests**
 
 Run: `npm --prefix apps/customer-order test`
 
@@ -522,7 +522,7 @@ Run: `npm test`
 
 Expected: all tests PASS, with only the documented sandbox port-binding skip allowed.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add apps/customer-order/server.js apps/customer-order/test/server.test.js apps/customer-order/.env.example apps/epaper-hub/docker-compose.yml apps/epaper-hub/test/deploy-config.test.js
@@ -544,17 +544,17 @@ git commit -m "Expire table visits at business rollover"
 **Interfaces:**
 - Documents: opaque token format, multi-phone enrollment, cookie authorization, accepted active-visit photo limitation, checkout contract, 06:00 expiry, and runtime secrets.
 
-- [ ] **Step 1: Write failing documentation assertions**
+- [x] **Step 1: Write failing documentation assertions**
 
 Extend deployment configuration tests to read all required documentation and assert it includes `/t/`, `SHOP_ID=1`, `CHECKOUT_API_KEY`, `HttpOnly`, multiple phones, checkout revocation, and 06:00 Asia/Tokyo expiry. Assert it no longer instructs clients to order with `?table=N` or JSON `table_number`.
 
-- [ ] **Step 2: Run focused test and verify RED**
+- [x] **Step 2: Run focused test and verify RED**
 
 Run: `npm --prefix apps/epaper-hub test -- test/deploy-config.test.js`
 
 Expected: FAIL on the new secure-QR documentation assertions.
 
-- [ ] **Step 3: Update all required documentation**
+- [x] **Step 3: Update all required documentation**
 
 Document these exact contracts:
 
@@ -568,7 +568,7 @@ Expiry: 06:00 Asia/Tokyo safety rollover
 
 State explicitly that a photograph taken before checkout remains usable during that active visit because mobile data and a shared non-rotating QR were selected.
 
-- [ ] **Step 4: Run full verification**
+- [x] **Step 4: Run full verification**
 
 Run: `npm test`
 
@@ -576,7 +576,7 @@ Run: `git diff --check`
 
 Expected: all tests PASS and whitespace check produces no output.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add README.md apps/customer-order/README.md apps/epaper-hub/README.md packages/epaper-hub-sdk/README.md infra/README.md apps/epaper-hub/test/deploy-config.test.js

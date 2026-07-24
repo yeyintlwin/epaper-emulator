@@ -8,7 +8,7 @@ Each restaurant table has an e-paper monitor. The monitor displays:
 - status: `Welcome` or `Table is in use`
 - QR code for the ordering page
 
-The QR code URL includes the table number so customer orders can be attached to the correct table session.
+The QR code URL is an opaque visit token, `https://order.yeyintlwin.com/t/AAAAAAAAAAAAAAAAAAAAAA`, carrying no table number, shop ID, or business date. Scanning it enrols the phone into that table's current visit and returns a session cookie, and the server attaches every later order to the table resolved from that cookie.
 
 ## Customer Ordering
 

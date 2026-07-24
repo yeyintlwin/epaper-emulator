@@ -17,7 +17,7 @@ test("posts a compact table template to the selected e-paper", async () => {
     epaperId: 3,
     tableNumber: 8,
     status: "Welcome",
-    url: "https://order.example.test/?table=8"
+    url: "https://order.example.test/t/SECONDtokenSECONDtok22"
   });
 
   assert.deepEqual(result, { ok: true, id: 3 });
@@ -45,7 +45,7 @@ test("exposes table rendering without sending a request", () => {
   const input = {
     tableNumber: 2,
     status: "Welcome",
-    url: "https://order.example.test/?table=2"
+    url: "https://order.example.test/t/THIRDtokenTHIRDtoken33"
   };
   assert.deepEqual(sdk.renderTableDisplay(input), renderTableDisplay(input));
 });

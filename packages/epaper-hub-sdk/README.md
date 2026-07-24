@@ -24,11 +24,11 @@ await epaper.updateTableDisplay({
   epaperId: 7,
   tableNumber: 7,
   status: "Table is in use",
-  url: "https://order.yeyintlwin.com/?table=7"
+  url: "https://order.yeyintlwin.com/t/EXAMPLEtokenEXAMPLEtok"
 });
 ```
 
-`epaperId` must be from 1 to 12. `tableNumber`, `status`, and `url` are rendered into the built-in template. The URL is encoded as a QR code without modification and is rejected if its QR matrix cannot fit the screen safely. The current status font supports uppercase ASCII letters, digits, spaces, and hyphens across two 15-character lines.
+`epaperId` must be from 1 to 12. `tableNumber`, `status`, and `url` are rendered into the built-in template. The URL is encoded as a QR code without modification and is rejected if its QR matrix cannot fit the screen safely. Callers pass the exact ordering URL; the SDK never builds one. In production that URL is the table's opaque visit URL, `https://order.yeyintlwin.com/t/` followed by 22 Base64URL characters, which the customer-order service rotates at checkout, on every service start, and at the `06:00 Asia/Tokyo` business rollover. The current status font supports uppercase ASCII letters, digits, spaces, and hyphens across two 15-character lines.
 
 To render without sending:
 
@@ -36,7 +36,7 @@ To render without sending:
 const payload = epaper.renderTableDisplay({
   tableNumber: 7,
   status: "Welcome",
-  url: "https://order.yeyintlwin.com/?table=7"
+  url: "https://order.yeyintlwin.com/t/EXAMPLEtokenEXAMPLEtok"
 });
 ```
 

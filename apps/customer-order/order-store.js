@@ -7,7 +7,7 @@ const TAX_RATE = 0.1;
 function normalizeTableNumber(value) {
   const tableNumber = Number(value);
   if (!Number.isInteger(tableNumber) || tableNumber < 1 || tableNumber > MAX_TABLE_NUMBER) {
-    throw new Error("table_number must be between 1 and 12");
+    throw new Error("table number must be between 1 and 12");
   }
   return tableNumber;
 }

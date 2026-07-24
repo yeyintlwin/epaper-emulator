@@ -26,7 +26,7 @@ EPAPER_ENV_FILE=/path/to/restaurant-order-system.env \
   docker compose -f apps/epaper-hub/docker-compose.yml up -d --build
 ```
 
-Compose starts the customer-order service after `/health` reports that the e-paper hub is ready. Customer ordering uses the private Docker URL `http://epaper-hub:3000`, publishes `127.0.0.1:3100`, and resets all 12 display screens before accepting traffic. Latest e-paper screen state is persisted in the Docker named volume `epaper-data`, so browser refreshes and container restarts keep the last update.
+Compose starts the customer-order service after `/health` reports that the e-paper hub is ready. Customer ordering uses the private Docker URL `http://epaper-hub:3000`, publishes `127.0.0.1:3100`, and resets all 12 display screens before accepting traffic. Each of those 12 screens carries that table's opaque visit URL, `https://order.yeyintlwin.com/t/AAAAAAAAAAAAAAAAAAAAAA`, where the trailing 22 Base64URL characters are the only table credential; the hub itself never parses or validates it. That startup bootstrap mints a fresh token per table, so every restart or redeploy replaces all 12 table URLs and invalidates every enrolled phone session. The visit store is in-memory only and nothing survives a restart. Latest e-paper screen state is persisted in the Docker named volume `epaper-data`, so browser refreshes and container restarts keep the last update.
 
 Customer-order startup requires the following production values. Keep `SHOP_ID` and `CHECKOUT_API_KEY` in the external runtime environment file passed through `EPAPER_ENV_FILE`; Compose supplies only the two non-secret business-time defaults.
 

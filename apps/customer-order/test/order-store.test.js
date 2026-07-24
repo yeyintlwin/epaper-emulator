@@ -61,7 +61,7 @@ test("invalid table and menu item requests are rejected", () => {
   const store = createOrderStore();
 
   assert.throws(() => store.placeOrder({ tableNumber: 13, items: [{ id: "tonkotsu-ramen", quantity: 1 }] }), {
-    message: /table_number must be between 1 and 12/
+    message: /table number must be between 1 and 12/
   });
   assert.throws(() => store.placeOrder({ tableNumber: 1, items: [{ id: "missing", quantity: 1 }] }), {
     message: /Unknown menu item/

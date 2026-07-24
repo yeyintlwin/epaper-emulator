@@ -111,6 +111,74 @@ test("deployment docs list required customer runtime values in the external envi
   assert.doesNotMatch(lifecycleDocs, /session closure (?:is outside|will be owned)|does not yet close active sessions|not available in the current in-memory order store/i);
 });
 
+const secureQrDocs = () => [
+  ["README.md", path.join(repoRoot, "README.md")],
+  ["apps/customer-order/README.md", path.join(repoRoot, "apps", "customer-order", "README.md")],
+  ["apps/epaper-hub/README.md", path.join(repoRoot, "apps", "epaper-hub", "README.md")],
+  ["packages/epaper-hub-sdk/README.md", path.join(repoRoot, "packages", "epaper-hub-sdk", "README.md")],
+  ["infra/README.md", path.join(repoRoot, "infra", "README.md")],
+  ["docs/restaurant-management-system-spec.md", path.join(repoRoot, "docs", "restaurant-management-system-spec.md")]
+].map(([label, file]) => [label, fs.readFileSync(file, "utf8")]);
+
+test("documentation no longer instructs the removed table-number ordering flow", () => {
+  for (const [label, document] of secureQrDocs()) {
+    assert.doesNotMatch(document, /\?table=/, label);
+    assert.doesNotMatch(document, /table_number/, label);
+    assert.doesNotMatch(document, /table number in the URL/i, label);
+  }
+});
+
+test("every table-facing document shows the opaque table visit URL", () => {
+  for (const [label, document] of secureQrDocs()) {
+    assert.match(document, /https:\/\/order\.yeyintlwin\.com\/t\/[A-Za-z0-9_-]{22}/, label);
+  }
+});
+
+test("lifecycle docs describe QR enrollment, multi-phone sessions, and checkout revocation", () => {
+  const lifecycle = [
+    fs.readFileSync(path.join(repoRoot, "README.md"), "utf8"),
+    fs.readFileSync(path.join(repoRoot, "apps", "customer-order", "README.md"), "utf8")
+  ].join("\n");
+
+  assert.match(lifecycle, /22 Base64URL characters/i);
+  assert.match(lifecycle, /rsid/);
+  assert.match(lifecycle, /HttpOnly; Secure; SameSite=Lax/);
+  assert.match(lifecycle, /multiple phones/i);
+  assert.match(lifecycle, /Scan the current table QR to continue/);
+  assert.match(lifecycle, /Table visit is no longer available/);
+  assert.match(lifecycle, /\b401\b/);
+  assert.match(lifecycle, /\b410\b/);
+  assert.match(lifecycle, /POST \/api\/tables\/\{tableNumber\}\/checkout/);
+  assert.match(lifecycle, /CHECKOUT_API_KEY/);
+  assert.match(lifecycle, /06:00 Asia\/Tokyo/);
+
+  assert.match(lifecycle, /revokes the old QR/i);
+  assert.match(lifecycle, /every (?:enrolled )?phone session/i);
+  assert.match(lifecycle, /before it updates the display|before the display update/i);
+  assert.match(lifecycle, /one pending replacement token/i);
+});
+
+test("lifecycle docs state the accepted active-visit photograph limitation", () => {
+  const lifecycle = [
+    fs.readFileSync(path.join(repoRoot, "README.md"), "utf8"),
+    fs.readFileSync(path.join(repoRoot, "apps", "customer-order", "README.md"), "utf8")
+  ].join("\n");
+
+  assert.match(lifecycle, /photograph/i);
+  assert.match(lifecycle, /remains usable (?:during|for) that active visit/i);
+});
+
+test("infra deployment notes cover the secure QR runtime contract", () => {
+  const infraReadme = fs.readFileSync(path.join(repoRoot, "infra", "README.md"), "utf8");
+
+  assert.match(infraReadme, /SHOP_ID=1/);
+  assert.match(infraReadme, /CHECKOUT_API_KEY/);
+  assert.match(infraReadme, /BUSINESS_TIME_ZONE=Asia\/Tokyo/);
+  assert.match(infraReadme, /BUSINESS_DAY_ROLLOVER_HOUR=6/);
+  assert.match(infraReadme, /06:00 Asia\/Tokyo/);
+  assert.match(infraReadme, /restaurant-order-system\.env/);
+});
+
 test("GitHub Actions deploys from GitHub-hosted runner over SSH", () => {
   const workflow = fs.readFileSync(
     path.join(repoRoot, ".github", "workflows", "deploy.yml"),

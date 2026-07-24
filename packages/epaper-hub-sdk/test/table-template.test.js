@@ -7,7 +7,7 @@ test("renders a compact 296x128 three-color table display", () => {
   const payload = renderTableDisplay({
     tableNumber: 7,
     status: "Table is in use",
-    url: "https://order.example.test/?table=7"
+    url: "https://order.example.test/t/EXAMPLEtokenEXAMPLEtok"
   });
 
   assert.equal(payload.format, "epd-2bit-v1");
@@ -23,14 +23,14 @@ test("renders a compact 296x128 three-color table display", () => {
 
 test("embeds the exact ordering URL into different QR pixels", () => {
   const common = { tableNumber: 7, status: "Welcome" };
-  const first = renderTableDisplay({ ...common, url: "https://order.example.test/?table=7" });
-  const second = renderTableDisplay({ ...common, url: "https://order.example.test/?table=8" });
+  const first = renderTableDisplay({ ...common, url: "https://order.example.test/t/EXAMPLEtokenEXAMPLEtok" });
+  const second = renderTableDisplay({ ...common, url: "https://order.example.test/t/SECONDtokenSECONDtok22" });
 
   assert.notEqual(first.data, second.data);
 });
 
 test("renders different status text into the frame", () => {
-  const common = { tableNumber: 7, url: "https://order.example.test/?table=7" };
+  const common = { tableNumber: 7, url: "https://order.example.test/t/EXAMPLEtokenEXAMPLEtok" };
   const welcome = renderTableDisplay({ ...common, status: "Welcome" });
   const inUse = renderTableDisplay({ ...common, status: "Table is in use" });
 
