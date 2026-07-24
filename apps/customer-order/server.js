@@ -229,7 +229,11 @@ function createServer(options = {}) {
       if (req.method === "GET" && enrollmentRoute) {
         const enrollment = visitStore.enroll(enrollmentRoute[1]);
         if (!enrollment) {
-          return sendJson(res, 410, { error: "Table visit is no longer available" });
+          res.writeHead(302, {
+            Location: "/?e=expired",
+            "Cache-Control": "no-store"
+          });
+          return res.end();
         }
         const expiresAt = Date.parse(enrollment.visit.expiresAt);
         const maxAge = Number.isFinite(expiresAt)

@@ -75,7 +75,7 @@ test("enrolling a current table QR creates a secure opaque phone session", async
   assert.doesNotMatch(JSON.stringify(response), new RegExp(token));
 });
 
-test("malformed, unknown, expired, and superseded QR tokens have one 410 response", async () => {
+test("malformed, unknown, expired, and superseded QR tokens all redirect to the expired screen", async () => {
   let now = new Date("2026-07-22T20:59:59Z");
   const expiredStore = createVisitStore({ now: () => now });
   const expiredToken = expiredStore.getRawTokenForDisplay(7);
@@ -94,8 +94,12 @@ test("malformed, unknown, expired, and superseded QR tokens have one 410 respons
   const responses = [];
   for (const entry of cases) responses.push(await entry.server.inject("GET", `/t/${entry.token}`));
 
-  for (const response of responses) assert.equal(response.status, 410);
-  for (const response of responses.slice(1)) assert.deepEqual(response.body, responses[0].body);
+  for (const response of responses) {
+    assert.equal(response.status, 302);
+    assert.equal(response.headers.Location, "/?e=expired");
+    assert.equal(response.headers["Cache-Control"], "no-store");
+    assert.equal(response.headers["Set-Cookie"], undefined);
+  }
   for (let index = 0; index < responses.length; index += 1) {
     assert.doesNotMatch(JSON.stringify(responses[index]), new RegExp(cases[index].token));
   }
@@ -314,7 +318,9 @@ test("rollover targets the next 06:00 Asia/Tokyo, invalidates sessions before di
   const reconciling = scheduled[0].callback();
   await new Promise(setImmediate);
 
-  assert.equal((await server.inject("GET", `/t/${oldToken}`)).status, 410);
+  const expiredScan = await server.inject("GET", `/t/${oldToken}`);
+  assert.equal(expiredScan.status, 302);
+  assert.equal(expiredScan.headers.Location, "/?e=expired");
   assert.equal((await server.inject("GET", "/api/session", undefined, { cookie: firstCookie })).status, 401);
   assert.equal((await server.inject("GET", "/api/session", undefined, { cookie: secondCookie })).status, 401);
   assert.equal(store.getSession(7).slipNumber, null);
@@ -374,7 +380,9 @@ test("rollover isolates display failures and retries the same pending URL and ge
   await server.reconcileExpiredVisits();
 
   const pending = visitStore.getCurrentVisit(7);
-  assert.equal((await server.inject("GET", `/t/${oldToken}`)).status, 410);
+  const expiredScan = await server.inject("GET", `/t/${oldToken}`);
+  assert.equal(expiredScan.status, 302);
+  assert.equal(expiredScan.headers.Location, "/?e=expired");
   assert.equal((await server.inject("GET", "/api/session", undefined, { cookie })).status, 401);
   assert.equal(store.getSession(7).slipNumber, null);
   assert.equal(pending.status, "pending_display");
@@ -991,7 +999,8 @@ test("checkout rotates the QR, revokes all phones, closes the order, and renders
   assert.equal(replacement.status, "welcome");
   assert.notEqual(newToken, oldToken);
   assert.deepEqual(welcomeUpdates, [{ tableNumber: 7, orderingUrl: replacement.orderingUrl }]);
-  assert.equal(oldQr.status, 410);
+  assert.equal(oldQr.status, 302);
+  assert.equal(oldQr.headers.Location, "/?e=expired");
   assert.equal(firstPhone.status, 401);
   assert.equal(secondPhone.status, 401);
   assert.equal(freshSession.body.session.slipNumber, null);
@@ -1136,7 +1145,8 @@ test("checkout failure keeps revocation and closed orders while retrying one pen
   assert.deepEqual(welcomeUrls, [pending.orderingUrl]);
   assert.equal(pending.status, "pending_display");
   assert.equal(pending.generation, before.generation + 1);
-  assert.equal(oldQr.status, 410);
+  assert.equal(oldQr.status, 302);
+  assert.equal(oldQr.headers.Location, "/?e=expired");
   assert.equal(firstPhone.status, 401);
   assert.equal(secondPhone.status, 401);
   assert.equal(store.getSession(7).slipNumber, null);
