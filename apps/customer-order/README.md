@@ -60,7 +60,7 @@ That path segment is exactly 22 Base64URL characters from 16 random bytes. Visit
 | Step | Contract |
 | --- | --- |
 | Enrollment | `GET /t/<token>` returns `302` to `/` and sets `rsid=<22 Base64URL characters>; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=<seconds until expiry>` |
-| Dead token | malformed, unknown, expired, or rotated all return `410` `{"error":"Table visit is no longer available"}` |
+| Dead token | malformed, unknown, expired, or rotated all `302`-redirect to `/?e=expired`, which shows a full-screen "This QR code is no longer valid" block and disables ordering |
 | Multiple phones | each scan of the current QR mints its own `rsid`; all phones share one visit, slip, and order list |
 | Customer APIs | table comes only from `rsid`; missing or forged returns `401` `{"error":"Scan the current table QR to continue"}` |
 | POST guards | `Origin: https://order.yeyintlwin.com` else `403`; `Content-Type: application/json` else `415` |

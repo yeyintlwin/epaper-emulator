@@ -145,9 +145,8 @@ test("lifecycle docs describe QR enrollment, multi-phone sessions, and checkout 
   assert.match(lifecycle, /HttpOnly; Secure; SameSite=Lax/);
   assert.match(lifecycle, /multiple phones/i);
   assert.match(lifecycle, /Scan the current table QR to continue/);
-  assert.match(lifecycle, /Table visit is no longer available/);
   assert.match(lifecycle, /\b401\b/);
-  assert.match(lifecycle, /\b410\b/);
+  assert.match(lifecycle, /\/\?e=expired/);
   assert.match(lifecycle, /POST \/api\/tables\/\{tableNumber\}\/checkout/);
   assert.match(lifecycle, /CHECKOUT_API_KEY/);
   assert.match(lifecycle, /06:00 Asia\/Tokyo/);
