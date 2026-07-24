@@ -207,8 +207,11 @@ function bentoTile(item, i) {
   const wide = i % 3 === 0;
   const hero = i === 0;
   const price = item.price === 0 ? "Free" : money.format(item.price);
-  return `<article class="bentoTile ${wide ? "wide" : ""} ${hero ? "hero" : ""}" style="--tint-bg:${t.bg};--tint-fg:${t.fg}">
-      <span class="glyph" aria-hidden="true">${monogram(item.name)}</span>
+  const media = item.image
+    ? `<img class="bentoImg" src="${item.image}" alt="" loading="lazy" />`
+    : `<span class="glyph" aria-hidden="true">${monogram(item.name)}</span>`;
+  return `<article class="bentoTile ${wide ? "wide" : ""} ${hero ? "hero" : ""} ${item.image ? "has-photo" : ""}" style="--tint-bg:${t.bg};--tint-fg:${t.fg}">
+      ${media}
       <div class="bentoTop">
         ${item.tags.includes("popular") ? `<span class="tag">Popular</span>` : ""}
         <h3>${item.name}</h3>

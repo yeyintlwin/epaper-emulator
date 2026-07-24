@@ -233,6 +233,19 @@ h1, h2, h3, p { margin: 0; }
 }
 .bentoTile.wide { grid-column: span 2; }
 .bentoTile.hero { min-height: 172px; }
+.bentoImg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.bentoTile.has-photo::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.5), rgba(0, 0, 0, 0.1) 38%, rgba(0, 0, 0, 0.12) 55%, rgba(0, 0, 0, 0.62));
+}
+.bentoTile.has-photo .bentoTop,
+.bentoTile.has-photo .bentoFoot { position: relative; z-index: 2; }
+.bentoTile.has-photo h3,
+.bentoTile.has-photo .bentoTop p,
+.bentoTile.has-photo .bentoFoot .price { color: #fff; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.55); }
 .bentoTile .glyph {
   position: absolute;
   right: -6px;
