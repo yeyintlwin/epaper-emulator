@@ -168,15 +168,22 @@ function featuredItems() {
   return flagged.length ? flagged : state.menu.items.filter((item) => item.category === "Recommended");
 }
 
-// Placeholder imagery until real photos exist. Each item may set `image` (a URL);
-// otherwise a category-tinted tile with a food emoji stands in.
-const EMOJI = {
-  "tonkotsu-ramen": "🍜", "crispy-gyoza": "🥟", "karaage-chicken": "🍗", "salmon-don": "🍣",
-  "extra-plate": "🍽️", "chopsticks": "🥢", "tissues": "🧻", "black-pepper": "🧂",
-  "mango-pudding": "🍮", "green-tea-ice-cream": "🍨", "iced-oolong": "🍵", "yuzu-soda": "🥤",
-  "draft-beer": "🍺", "lemon-sour": "🍸"
-};
-const emojiFor = (id) => EMOJI[id] || "🍽️";
+// Placeholder imagery: a category-tinted card (gradient + category icon + dish name)
+// rendered as an inline SVG data URI. Set `image` on a menu item to use a real photo.
+function placeholderImage(item) {
+  const t = tintFor(item.category);
+  const name = String(item.name).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const svg =
+    `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 320 320'>` +
+    `<defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'>` +
+    `<stop offset='0' stop-color='${t.bg}'/><stop offset='1' stop-color='${t.fg}' stop-opacity='0.3'/>` +
+    `</linearGradient></defs>` +
+    `<rect width='320' height='320' fill='url(#g)'/>` +
+    `<g transform='translate(112 74) scale(4)' fill='${t.fg}' fill-opacity='0.22'>${iconFor(item.category)}</g>` +
+    `<text x='160' y='252' text-anchor='middle' font-family='Inter, ui-sans-serif, sans-serif' font-size='23' font-weight='700' fill='${t.fg}'>${name}</text>` +
+    `</svg>`;
+  return `data:image/svg+xml,${encodeURIComponent(svg)}`;
+}
 
 const EMPTY_ICON = {
   menu: `<path d="M8.1 13.34l2.83-2.83L3.91 3.5a4 4 0 0 0 0 5.66l4.19 4.18zm6.78-1.81c1.53.71 3.68.21 5.27-1.38 1.91-1.91 2.28-4.65.81-6.12-1.46-1.46-4.2-1.1-6.12.81-1.59 1.59-2.09 3.74-1.38 5.27L3.7 19.87l1.41 1.41L12 14.41l6.88 6.88 1.41-1.41L13.41 13l1.47-1.47z"/>`,
@@ -189,9 +196,7 @@ function emptyState(icon, message) {
 }
 
 function photoMarkup(item) {
-  return item.image
-    ? `<img src="${item.image}" alt="" loading="lazy" />`
-    : `<span class="photoEmoji" aria-hidden="true">${emojiFor(item.id)}</span>`;
+  return `<img class="photoImg" src="${item.image || placeholderImage(item)}" alt="" loading="lazy" />`;
 }
 
 function listCard(item) {
@@ -313,6 +318,10 @@ function renderSession() {
   renderTotals(s ? s.totals : { subtotal: 0, serviceFee: 0, tax: 0, total: 0 });
   renderHistory();
   renderBarcode(s && s.slipNumber);
+  // "Bring my dessert" only makes sense once a dessert has actually been ordered.
+  const orders = s && s.orders ? s.orders : [];
+  const hasDessert = orders.some((o) => Array.isArray(o.items) && o.items.some((i) => i.category === "Desserts"));
+  $("#serveDessertButton").hidden = !hasDessert;
 }
 
 async function placeOrder() {
@@ -350,7 +359,7 @@ document.addEventListener("click", (event) => {
 
   if (inc) requestAdd(inc.dataset.inc);
   if (dec) setQuantity(dec.dataset.dec, quantityFor(dec.dataset.dec) - 1);
-  if (tab) { state.activeTab = tab.dataset.tab; closeDrawer(); renderMenu(); }
+  if (tab) { state.activeTab = tab.dataset.tab; setActiveView("menu"); closeDrawer(); renderMenu(); }
   if (view) { setActiveView(view.dataset.view); if (event.target.closest("[data-close]")) closeDrawer(); }
   if (timing) {
     const id = state.pending;
