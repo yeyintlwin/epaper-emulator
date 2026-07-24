@@ -168,22 +168,15 @@ function featuredItems() {
   return flagged.length ? flagged : state.menu.items.filter((item) => item.category === "Recommended");
 }
 
-// Placeholder imagery: a category-tinted card (gradient + category icon + dish name)
-// rendered as an inline SVG data URI. Set `image` on a menu item to use a real photo.
-function placeholderImage(item) {
-  const t = tintFor(item.category);
-  const name = String(item.name).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-  const svg =
-    `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 320 320'>` +
-    `<defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'>` +
-    `<stop offset='0' stop-color='${t.bg}'/><stop offset='1' stop-color='${t.fg}' stop-opacity='0.3'/>` +
-    `</linearGradient></defs>` +
-    `<rect width='320' height='320' fill='url(#g)'/>` +
-    `<g transform='translate(112 74) scale(4)' fill='${t.fg}' fill-opacity='0.22'>${iconFor(item.category)}</g>` +
-    `<text x='160' y='252' text-anchor='middle' font-family='Inter, ui-sans-serif, sans-serif' font-size='23' font-weight='700' fill='${t.fg}'>${name}</text>` +
-    `</svg>`;
-  return `data:image/svg+xml,${encodeURIComponent(svg)}`;
-}
+// A single neutral placeholder shown for any menu item without a photo. Real photos
+// arrive via admin management (set `image` on the item) once shops upload them.
+const PLACEHOLDER_IMAGE = `data:image/svg+xml,${encodeURIComponent(
+  "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 320 320'>" +
+  "<rect width='320' height='320' fill='#eef0f2'/>" +
+  "<g transform='translate(100 100) scale(5)' fill='#b9bfc8'>" +
+  "<path d='M8.1 13.34l2.83-2.83L3.91 3.5a4 4 0 0 0 0 5.66l4.19 4.18zm6.78-1.81c1.53.71 3.68.21 5.27-1.38 1.91-1.91 2.28-4.65.81-6.12-1.46-1.46-4.2-1.1-6.12.81-1.59 1.59-2.09 3.74-1.38 5.27L3.7 19.87l1.41 1.41L12 14.41l6.88 6.88 1.41-1.41L13.41 13l1.47-1.47z'/>" +
+  "</g></svg>"
+)}`;
 
 const EMPTY_ICON = {
   menu: `<path d="M8.1 13.34l2.83-2.83L3.91 3.5a4 4 0 0 0 0 5.66l4.19 4.18zm6.78-1.81c1.53.71 3.68.21 5.27-1.38 1.91-1.91 2.28-4.65.81-6.12-1.46-1.46-4.2-1.1-6.12.81-1.59 1.59-2.09 3.74-1.38 5.27L3.7 19.87l1.41 1.41L12 14.41l6.88 6.88 1.41-1.41L13.41 13l1.47-1.47z"/>`,
@@ -197,14 +190,13 @@ function emptyState(icon, message) {
 }
 
 function photoMarkup(item) {
-  return `<img class="photoImg" src="${item.image || placeholderImage(item)}" alt="" loading="lazy" />`;
+  return `<img class="photoImg" src="${item.image || PLACEHOLDER_IMAGE}" alt="" loading="lazy" />`;
 }
 
 function listCard(item) {
-  const t = tintFor(item.category);
   const price = item.price === 0 ? `<span class="price free">Free</span>` : `<span class="price">${money.format(item.price)}</span>`;
   return `<article class="menuItem">
-      <div class="menuPhoto" style="background:linear-gradient(135deg, ${t.bg}, ${t.fg}22)">${photoMarkup(item)}</div>
+      <div class="menuPhoto">${photoMarkup(item)}</div>
       <div class="menuText"><h3>${item.name}</h3><p>${item.description}</p>${price}</div>
       <div class="menuAdd">${stepperMarkup(item.id, quantityFor(item.id), false)}</div>
     </article>`;
